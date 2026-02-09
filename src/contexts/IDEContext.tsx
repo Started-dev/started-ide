@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { IDEFile, OpenTab, ChatMessage, RunResult, Project } from '@/types/ide';
+import { CLAUDE_SYSTEM_PROMPT } from '@/lib/claude-prompt';
 
 const DEMO_FILES: IDEFile[] = [
   {
@@ -163,18 +164,43 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     };
     setChatMessages(prev => [...prev, userMsg]);
 
-    // Mock Claude response
+    // Build context block from chips
+    const contextParts: string[] = [];
+    if (chips) {
+      for (const chip of chips) {
+        if (chip.type === 'selection') {
+          contextParts.push(`[Selected code]\n${chip.content}`);
+        } else if (chip.type === 'file') {
+          contextParts.push(`[File: ${chip.label}]\n${chip.content}`);
+        } else if (chip.type === 'errors') {
+          contextParts.push(`[Last run errors]\n${chip.content}`);
+        }
+      }
+    }
+
+    const contextBlock = contextParts.length > 0
+      ? `\n\nContext provided:\n${contextParts.join('\n\n')}`
+      : '';
+
+    // TODO: Replace with real API call to POST /api/claude
+    // The request body should be:
+    // {
+    //   project_id: project.id,
+    //   chat_id: 'default',
+    //   user_message: content + contextBlock,
+    //   context: { chips, files: files.map(f => ({ path: f.path, content: f.content })) },
+    //   system_prompt: CLAUDE_SYSTEM_PROMPT
+    // }
     setTimeout(() => {
-      const contextInfo = chips?.map(c => `[${c.type}: ${c.label}]`).join(' ') || '';
       const assistantMsg: ChatMessage = {
         id: `msg-${Date.now() + 1}`,
         role: 'assistant',
-        content: generateMockResponse(content, contextInfo),
+        content: generateMockResponse(content, contextBlock),
         timestamp: new Date(),
       };
       setChatMessages(prev => [...prev, assistantMsg]);
     }, 800);
-  }, []);
+  }, [files, project.id]);
 
   const runCommand = useCallback((command: string) => {
     setShowOutput(true);
@@ -225,9 +251,88 @@ export const useIDE = () => {
 };
 
 function generateMockResponse(userMessage: string, context: string): string {
-  if (userMessage.toLowerCase().includes('test')) {
-    return `**Plan:**\n- Add unit tests for the \`greet\` and \`add\` functions\n- Use Jest as the testing framework\n- Cover edge cases\n\n\`\`\`diff\n--- /dev/null\n+++ src/utils.test.ts\n@@ -0,0 +1,19 @@\n+import { greet, add } from './utils';\n+\n+describe('greet', () => {\n+  it('should greet with name', () => {\n+    expect(greet('Claude')).toBe('Hello, Claude! Welcome to Claude Code.');\n+  });\n+});\n+\n+describe('add', () => {\n+  it('should add two numbers', () => {\n+    expect(add(2, 3)).toBe(5);\n+  });\n+\n+  it('should handle negative numbers', () => {\n+    expect(add(-1, 1)).toBe(0);\n+  });\n+});\n\`\`\`\n\n**Run:** \`npm test\``;
+  const lc = userMessage.toLowerCase();
+
+  if (lc.includes('test')) {
+    return `**Plan:**
+- Add unit tests for \`greet\` and \`add\` functions
+- Use Jest as the testing framework
+- Cover edge cases and boundary conditions
+
+\`\`\`diff
+--- /dev/null
++++ src/utils.test.ts
+@@ -0,0 +1,19 @@
++import { greet, add } from './utils';
++
++describe('greet', () => {
++  it('should greet with name', () => {
++    expect(greet('Claude')).toBe('Hello, Claude! Welcome to Claude Code.');
++  });
++});
++
++describe('add', () => {
++  it('should add two numbers', () => {
++    expect(add(2, 3)).toBe(5);
++  });
++
++  it('should handle negative numbers', () => {
++    expect(add(-1, 1)).toBe(0);
++  });
++});
+\`\`\`
+
+\`\`\`
+npm test
+\`\`\``;
   }
 
-  return `**Plan:**\n- Analyze the provided code ${context}\n- Suggest improvements for readability and performance\n- Apply best practices\n\nI can see your code. Here are a few suggestions:\n\n1. Consider adding input validation\n2. Add JSDoc comments for better documentation\n3. Consider error handling for edge cases\n\nWould you like me to generate a patch for any of these improvements?`;
+  if (lc.includes('fix') || lc.includes('bug') || lc.includes('error')) {
+    return `**Plan:**
+- Inspect the reported issue${context ? ' with provided context' : ''}
+- Identify root cause
+- Apply minimal fix
+
+I'd need to see the specific error output. Attach \`@errors:lastRun\` or paste the stack trace so I can generate a precise patch.`;
+  }
+
+  if (lc.includes('refactor') || lc.includes('improve') || lc.includes('clean')) {
+    return `**Plan:**
+- Review current implementation${context ? '\n- Analyze provided context' : ''}
+- Extract reusable helpers
+- Improve type safety
+- Reduce duplication
+
+\`\`\`diff
+--- a/src/utils.ts
++++ b/src/utils.ts
+@@ -1,4 +1,8 @@
++/** Generates a greeting message for the given name. */
+ export function greet(name: string): string {
++  if (!name?.trim()) {
++    throw new Error('Name must be a non-empty string');
++  }
+   return \`Hello, \${name}! Welcome to Claude Code.\`;
+ }
+\`\`\`
+
+\`\`\`
+npm test
+\`\`\`
+
+**Notes:** Added input validation and JSDoc. Run tests to verify nothing breaks.`;
+  }
+
+  return `**Plan:**
+- Analyze request${context ? ' with provided context' : ''}
+- Identify relevant files
+- Propose minimal changes
+
+I've reviewed your request. Here's what I suggest:
+
+1. The current code structure looks solid
+2. I can help with specific changes — try selecting code and using \`@selection\`, or attach a file with \`@file\`
+3. For bug fixes, attach \`@errors\` from the last run
+
+What specific change would you like me to make?`;
 }
