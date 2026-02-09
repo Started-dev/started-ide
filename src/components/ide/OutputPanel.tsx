@@ -1,22 +1,19 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, Play, Terminal, Square, CheckCircle, XCircle, Loader2, Clock, FolderOpen, Cpu } from 'lucide-react';
+import { ChevronUp, ChevronDown, Play, Terminal, Square, CheckCircle, XCircle, Loader2, Clock, FolderOpen, Cpu, Send } from 'lucide-react';
 import { useIDE } from '@/contexts/IDEContext';
 
 export function OutputPanel() {
-  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess } = useIDE();
+  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess, sendErrorsToChat } = useIDE();
   const [commandInput, setCommandInput] = useState('npm start');
 
   const lastRun = runs[runs.length - 1];
   const isRunning = lastRun?.status === 'running';
+  const hasErrors = lastRun && (lastRun.status === 'error' || (lastRun.exitCode && lastRun.exitCode !== 0));
 
   const handleRun = () => {
     if (commandInput.trim()) {
       runCommand(commandInput.trim());
     }
-  };
-
-  const handleKill = () => {
-    killRunningProcess();
   };
 
   return (
@@ -41,7 +38,6 @@ export function OutputPanel() {
               {lastRun.status}
             </span>
           )}
-          {/* Session indicator */}
           {runnerSession && (
             <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-primary/10 text-primary">
               <Cpu className="h-3 w-3" />
@@ -49,15 +45,27 @@ export function OutputPanel() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* cwd indicator */}
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {/* Send errors to Claude button */}
+          {hasErrors && (
+            <button
+              onClick={sendErrorsToChat}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-ide-error/10 text-ide-error rounded-sm hover:bg-ide-error/20 transition-colors"
+              title="Send errors to Claude for analysis"
+            >
+              <Send className="h-2.5 w-2.5" />
+              Ask Claude
+            </button>
+          )}
           {runnerSession && (
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
               <FolderOpen className="h-3 w-3" />
               {runnerSession.cwd}
             </span>
           )}
-          {showOutput ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />}
+          <div onClick={toggleOutput}>
+            {showOutput ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />}
+          </div>
         </div>
       </div>
 
@@ -76,7 +84,7 @@ export function OutputPanel() {
             />
             {isRunning ? (
               <button
-                onClick={handleKill}
+                onClick={() => killRunningProcess()}
                 className="flex items-center gap-1 px-2 py-1 bg-ide-error/10 text-ide-error text-xs rounded-sm hover:bg-ide-error/20 transition-colors"
               >
                 <Square className="h-3 w-3" />
@@ -113,9 +121,6 @@ export function OutputPanel() {
                         <FolderOpen className="h-2.5 w-2.5" />
                         {run.cwd}
                       </span>
-                    )}
-                    {run.sessionId && (
-                      <span className="opacity-50">{run.sessionId.slice(0, 16)}…</span>
                     )}
                   </div>
                   <pre className="whitespace-pre-wrap text-foreground/80">{run.logs}</pre>

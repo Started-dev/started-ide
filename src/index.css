@@ -57,6 +57,56 @@
     --ide-info: 217 91% 60%;
     --ide-selection: 38 92% 50%;
   }
+
+  .light {
+    --background: 220 14% 96%;
+    --foreground: 220 14% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 14% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 14% 15%;
+
+    --primary: 38 92% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 14% 30%;
+
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 220 14% 90%;
+    --accent-foreground: 220 14% 15%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 85%;
+    --input: 220 14% 92%;
+    --ring: 38 92% 45%;
+
+    --sidebar-background: 220 14% 97%;
+    --sidebar-foreground: 220 10% 30%;
+    --sidebar-primary: 38 92% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 93%;
+    --sidebar-accent-foreground: 220 14% 15%;
+    --sidebar-border: 220 14% 88%;
+    --sidebar-ring: 38 92% 45%;
+
+    --ide-panel-bg: 220 14% 98%;
+    --ide-panel-header: 220 14% 95%;
+    --ide-tab-active: 0 0% 100%;
+    --ide-tab-inactive: 220 14% 96%;
+    --ide-tab-hover: 220 14% 93%;
+    --ide-success: 142 71% 35%;
+    --ide-error: 0 72% 51%;
+    --ide-warning: 38 80% 45%;
+    --ide-info: 217 91% 50%;
+    --ide-selection: 38 92% 45%;
+  }
 }
 
 @layer base {

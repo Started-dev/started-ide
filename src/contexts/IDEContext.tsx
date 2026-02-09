@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { IDEFile, OpenTab, ChatMessage, RunResult, Project } from '@/types/ide';
+import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip } from '@/types/ide';
 import { ToolCall, ToolName, PatchPreview, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
 import { RunnerSession } from '@/types/runner';
 import { CLAUDE_SYSTEM_PROMPT } from '@/lib/claude-prompt';
@@ -7,10 +7,33 @@ import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
 
+const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
+
+This file is loaded as default context for every Claude conversation.
+Edit it to give Claude persistent knowledge about your project.
+
+## Project Overview
+A simple TypeScript demo project.
+
+## Conventions
+- Use TypeScript strict mode
+- Prefer functional style
+- Run \`npm test\` to verify changes
+
+## Important Files
+- \`src/main.ts\` — entry point
+- \`src/utils.ts\` — shared utilities
+`;
+
 const DEMO_FILES: IDEFile[] = [
   {
     id: 'root-src', name: 'src', path: '/src', content: '', language: '',
     parentId: null, isFolder: true,
+  },
+  {
+    id: 'f-claude-md', name: 'CLAUDE.md', path: '/CLAUDE.md',
+    content: CLAUDE_MD_CONTENT,
+    language: 'markdown', parentId: null, isFolder: false,
   },
   {
     id: 'f-main', name: 'main.ts', path: '/src/main.ts',
@@ -76,6 +99,10 @@ interface IDEContextType {
   // Runner session
   runnerSession: RunnerSession | null;
   killRunningProcess: () => void;
+  // Convenience
+  sendErrorsToChat: () => void;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -111,6 +138,15 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [pendingPatches, setPendingPatches] = useState<PatchPreview[]>([]);
   const [permissionPolicy, setPermissionPolicy] = useState<PermissionPolicy>(DEFAULT_PERMISSION_POLICY);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      document.documentElement.classList.toggle('light', next === 'light');
+      return next;
+    });
+  }, []);
 
   const getFileById = useCallback((id: string) => files.find(f => f.id === id), [files]);
 
@@ -356,6 +392,11 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         else if (chip.type === 'errors') contextParts.push(`[Last run errors]\n${chip.content}`);
       }
     }
+    // Always inject CLAUDE.md as base context
+    const claudeMd = files.find(f => f.path === '/CLAUDE.md');
+    if (claudeMd && claudeMd.content.trim()) {
+      contextParts.unshift(`[CLAUDE.md — Project Brief]\n${claudeMd.content}`);
+    }
     const contextBlock = contextParts.length > 0 ? `\n\nContext provided:\n${contextParts.join('\n\n')}` : '';
 
     // TODO: Replace with real API call to POST /api/claude
@@ -474,6 +515,17 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   }, [ensureSession]);
 
+  const sendErrorsToChat = useCallback(() => {
+    const lastRun = runs[runs.length - 1];
+    if (!lastRun) return;
+    const errorChips: ContextChip[] = [{
+      type: 'errors',
+      label: 'Last Run',
+      content: lastRun.logs,
+    }];
+    sendMessage('Here are the errors from my last run. Please analyze and fix them.', errorChips);
+  }, [runs, sendMessage]);
+
   return (
     <IDEContext.Provider value={{
       project, files, openTabs, activeTabId, chatMessages, runs,
@@ -488,6 +540,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       approveToolCall, denyToolCall, alwaysAllowTool, alwaysAllowCommand,
       applyPatch, applyPatchAndRun, cancelPatch,
       runnerSession, killRunningProcess,
+      sendErrorsToChat,
+      theme, toggleTheme,
     }}>
       {children}
     </IDEContext.Provider>

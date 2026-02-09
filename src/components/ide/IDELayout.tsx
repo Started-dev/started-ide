@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sparkles } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
@@ -8,7 +9,54 @@ import { CommandPalette } from './CommandPalette';
 import { useIDE } from '@/contexts/IDEContext';
 
 export function IDELayout() {
-  const { showChat, toggleChat, toggleOutput, showOutput, project, runCommand } = useIDE();
+  const { showChat, toggleChat, toggleOutput, showOutput, project, runCommand, openFile, files, theme, toggleTheme, sendMessage, selectedText } = useIDE();
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+
+      // Cmd+P — quick file open (handled by CommandPalette with file mode)
+      if (mod && e.key === 'p') {
+        e.preventDefault();
+        // Dispatch Cmd+K to open palette (file search mode)
+        const evt = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+        window.dispatchEvent(evt);
+      }
+
+      // Cmd/Ctrl+Enter — send selection to Claude
+      if (mod && e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedText) {
+          sendMessage('Explain this code and suggest improvements.', [{
+            type: 'selection', label: 'Selection', content: selectedText,
+          }]);
+        } else {
+          runCommand('npm test');
+        }
+      }
+
+      // Cmd+B — toggle chat
+      if (mod && e.key === 'b') {
+        e.preventDefault();
+        toggleChat();
+      }
+
+      // Cmd+J — toggle output
+      if (mod && e.key === 'j') {
+        e.preventDefault();
+        toggleOutput();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleChat, toggleOutput, runCommand, sendMessage, selectedText]);
+
+  // Open CLAUDE.md
+  const openProjectBrief = () => {
+    const claudeFile = files.find(f => f.path === '/CLAUDE.md');
+    if (claudeFile) openFile(claudeFile.id);
+  };
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden">
@@ -25,6 +73,14 @@ export function IDELayout() {
 
         <div className="flex items-center gap-1">
           <button
+            onClick={openProjectBrief}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="Edit CLAUDE.md (Project Brief)"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Brief</span>
+          </button>
+          <button
             onClick={() => runCommand('npm start')}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-ide-success/10 text-ide-success rounded-sm hover:bg-ide-success/20 transition-colors"
           >
@@ -32,16 +88,23 @@ export function IDELayout() {
             Run
           </button>
           <button
+            onClick={toggleTheme}
+            className="p-1.5 rounded-sm text-muted-foreground hover:bg-accent/50 transition-colors"
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
+          <button
             onClick={toggleOutput}
             className={`p-1.5 rounded-sm transition-colors ${showOutput ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
-            title="Toggle Output"
+            title="Toggle Output (⌘J)"
           >
             <Terminal className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={toggleChat}
             className={`p-1.5 rounded-sm transition-colors ${showChat ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}
-            title="Toggle Chat"
+            title="Toggle Chat (⌘B)"
           >
             <MessageSquare className="h-3.5 w-3.5" />
           </button>
@@ -101,7 +164,7 @@ export function IDELayout() {
             <span className="h-1.5 w-1.5 rounded-full bg-ide-success" />
             Connected
           </span>
-          <span>⌘K for commands</span>
+          <span>⌘K commands · ⌘P files · ⌘⏎ send</span>
         </div>
       </div>
 
