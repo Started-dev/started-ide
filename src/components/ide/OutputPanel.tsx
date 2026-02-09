@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, Play, Terminal, Trash2, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Play, Terminal, Square, CheckCircle, XCircle, Loader2, Clock, FolderOpen, Cpu } from 'lucide-react';
 import { useIDE } from '@/contexts/IDEContext';
 
 export function OutputPanel() {
-  const { runs, runCommand, showOutput, toggleOutput } = useIDE();
+  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess } = useIDE();
   const [commandInput, setCommandInput] = useState('npm start');
 
   const lastRun = runs[runs.length - 1];
+  const isRunning = lastRun?.status === 'running';
 
   const handleRun = () => {
     if (commandInput.trim()) {
       runCommand(commandInput.trim());
     }
+  };
+
+  const handleKill = () => {
+    killRunningProcess();
   };
 
   return (
@@ -36,29 +41,56 @@ export function OutputPanel() {
               {lastRun.status}
             </span>
           )}
+          {/* Session indicator */}
+          {runnerSession && (
+            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-primary/10 text-primary">
+              <Cpu className="h-3 w-3" />
+              {runnerSession.runtimeType}
+            </span>
+          )}
         </div>
-        {showOutput ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />}
+        <div className="flex items-center gap-2">
+          {/* cwd indicator */}
+          {runnerSession && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+              <FolderOpen className="h-3 w-3" />
+              {runnerSession.cwd}
+            </span>
+          )}
+          {showOutput ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />}
+        </div>
       </div>
 
       {showOutput && (
         <div className="flex flex-col h-[calc(100%-32px)]">
           {/* Command input */}
           <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border">
-            <span className="text-xs text-muted-foreground">$</span>
+            <span className="text-xs text-muted-foreground font-mono">$</span>
             <input
               value={commandInput}
               onChange={e => setCommandInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleRun()}
               className="flex-1 bg-transparent text-sm font-mono text-foreground outline-none"
               placeholder="Enter command..."
+              disabled={isRunning}
             />
-            <button
-              onClick={handleRun}
-              className="flex items-center gap-1 px-2 py-1 bg-ide-success/10 text-ide-success text-xs rounded-sm hover:bg-ide-success/20 transition-colors"
-            >
-              <Play className="h-3 w-3" />
-              Run
-            </button>
+            {isRunning ? (
+              <button
+                onClick={handleKill}
+                className="flex items-center gap-1 px-2 py-1 bg-ide-error/10 text-ide-error text-xs rounded-sm hover:bg-ide-error/20 transition-colors"
+              >
+                <Square className="h-3 w-3" />
+                Kill
+              </button>
+            ) : (
+              <button
+                onClick={handleRun}
+                className="flex items-center gap-1 px-2 py-1 bg-ide-success/10 text-ide-success text-xs rounded-sm hover:bg-ide-success/20 transition-colors"
+              >
+                <Play className="h-3 w-3" />
+                Run
+              </button>
+            )}
           </div>
 
           {/* Logs */}
@@ -68,8 +100,23 @@ export function OutputPanel() {
             ) : (
               runs.map(run => (
                 <div key={run.id} className="mb-3">
-                  <div className="text-muted-foreground text-[10px] mb-1">
-                    {run.timestamp.toLocaleTimeString()}
+                  <div className="flex items-center gap-2 text-muted-foreground text-[10px] mb-1">
+                    <span>{run.timestamp.toLocaleTimeString()}</span>
+                    {run.durationMs !== undefined && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Clock className="h-2.5 w-2.5" />
+                        {run.durationMs < 1000 ? `${run.durationMs}ms` : `${(run.durationMs / 1000).toFixed(1)}s`}
+                      </span>
+                    )}
+                    {run.cwd && (
+                      <span className="inline-flex items-center gap-0.5 font-mono">
+                        <FolderOpen className="h-2.5 w-2.5" />
+                        {run.cwd}
+                      </span>
+                    )}
+                    {run.sessionId && (
+                      <span className="opacity-50">{run.sessionId.slice(0, 16)}…</span>
+                    )}
                   </div>
                   <pre className="whitespace-pre-wrap text-foreground/80">{run.logs}</pre>
                 </div>

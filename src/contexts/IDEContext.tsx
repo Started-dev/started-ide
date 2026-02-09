@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { IDEFile, OpenTab, ChatMessage, RunResult, Project } from '@/types/ide';
 import { ToolCall, ToolName, PatchPreview, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
+import { RunnerSession } from '@/types/runner';
 import { CLAUDE_SYSTEM_PROMPT } from '@/lib/claude-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
+import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
 
 const DEMO_FILES: IDEFile[] = [
@@ -71,6 +73,9 @@ interface IDEContextType {
   applyPatch: (patchId: string) => void;
   applyPatchAndRun: (patchId: string, command: string) => void;
   cancelPatch: (patchId: string) => void;
+  // Runner session
+  runnerSession: RunnerSession | null;
+  killRunningProcess: () => void;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -82,6 +87,9 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     runtimeType: 'node',
     files: [],
   });
+
+  const runnerClientRef = useRef<IRunnerClient>(getRunnerClient());
+  const [runnerSession, setRunnerSession] = useState<RunnerSession | null>(null);
 
   const [files, setFiles] = useState<IDEFile[]>(DEMO_FILES);
   const [openTabs, setOpenTabs] = useState<OpenTab[]>([
@@ -398,7 +406,28 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }, 800);
   }, [files, project.id, permissionPolicy, executeAndUpdateTool]);
 
-  const runCommand = useCallback((command: string) => {
+  // ─── Runner Session Management ───
+
+  const ensureSession = useCallback(async (): Promise<RunnerSession> => {
+    if (runnerSession && runnerSession.status === 'ready') return runnerSession;
+    const client = runnerClientRef.current;
+    const session = await client.createSession(project.id, project.runtimeType);
+    // Sync workspace files into the session
+    await client.syncWorkspace(session.id, files.filter(f => !f.isFolder));
+    setRunnerSession(session);
+    return session;
+  }, [runnerSession, project.id, project.runtimeType, files]);
+
+  const killRunningProcess = useCallback(async () => {
+    if (!runnerSession) return;
+    await runnerClientRef.current.killProcess(runnerSession.id);
+    setRunnerSession(prev => prev ? { ...prev, status: 'ready' } : null);
+    setRuns(prev => prev.map(r =>
+      r.status === 'running' ? { ...r, status: 'error' as const, logs: r.logs + '\n⚠ Process killed by user\n', exitCode: 137 } : r
+    ));
+  }, [runnerSession]);
+
+  const runCommand = useCallback(async (command: string) => {
     setShowOutput(true);
     const run: RunResult = {
       id: `run-${Date.now()}`,
@@ -409,19 +438,41 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     };
     setRuns(prev => [...prev, run]);
 
-    setTimeout(() => {
+    try {
+      const session = await ensureSession();
+      const result = await runnerClientRef.current.exec(session.id, {
+        command,
+        timeoutS: 600,
+      });
+
+      setRunnerSession(prev => prev ? { ...prev, cwd: result.cwd, status: 'ready' } : null);
+
       setRuns(prev => prev.map(r =>
         r.id === run.id
           ? {
               ...r,
-              status: 'success' as const,
-              logs: r.logs + `\n> demo-project@1.0.0 start\n> ts-node src/main.ts\n\nHello, World! Welcome to Claude Code.\nClaude Code Cloud IDE is running!\n\n✓ Process exited with code 0\n`,
-              exitCode: 0,
+              status: result.ok ? 'success' as const : 'error' as const,
+              logs: r.logs + (result.stdout || '') + (result.stderr ? `\nSTDERR:\n${result.stderr}` : '') + `\n\n${result.ok ? '✓' : '✗'} Process exited with code ${result.exitCode}\n`,
+              exitCode: result.exitCode,
+              cwd: result.cwd,
+              durationMs: result.durationMs,
+              sessionId: session.id,
             }
           : r
       ));
-    }, 1500);
-  }, []);
+    } catch (err) {
+      setRuns(prev => prev.map(r =>
+        r.id === run.id
+          ? {
+              ...r,
+              status: 'error' as const,
+              logs: r.logs + `\n⚠ Runner error: ${err instanceof Error ? err.message : 'Unknown error'}\n`,
+              exitCode: 1,
+            }
+          : r
+      ));
+    }
+  }, [ensureSession]);
 
   return (
     <IDEContext.Provider value={{
@@ -436,6 +487,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       toolCalls, pendingPatches, permissionPolicy,
       approveToolCall, denyToolCall, alwaysAllowTool, alwaysAllowCommand,
       applyPatch, applyPatchAndRun, cancelPatch,
+      runnerSession, killRunningProcess,
     }}>
       {children}
     </IDEContext.Provider>

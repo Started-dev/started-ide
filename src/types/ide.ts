@@ -36,12 +36,15 @@ export interface RunResult {
   status: 'running' | 'success' | 'error';
   logs: string;
   exitCode?: number;
+  cwd?: string;
+  durationMs?: number;
+  sessionId?: string;
   timestamp: Date;
 }
 
 export interface Project {
   id: string;
   name: string;
-  runtimeType: 'node' | 'python';
+  runtimeType: 'node' | 'python' | 'shell';
   files: IDEFile[];
 }
