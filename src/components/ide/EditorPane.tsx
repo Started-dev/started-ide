@@ -4,7 +4,7 @@ import { X, Circle } from 'lucide-react';
 import { useIDE } from '@/contexts/IDEContext';
 
 export function EditorPane() {
-  const { openTabs, activeTabId, setActiveTab, closeTab, getFileById, updateFileContent, setSelectedText } = useIDE();
+  const { openTabs, activeTabId, setActiveTab, closeTab, getFileById, updateFileContent, setSelectedText, theme } = useIDE();
   const editorRef = useRef<any>(null);
 
   const activeFile = activeTabId ? getFileById(activeTabId) : null;
@@ -66,7 +66,7 @@ export function EditorPane() {
             key={activeFile.id}
             defaultValue={activeFile.content}
             language={activeFile.language}
-            theme="vs-dark"
+            theme={theme === 'dark' ? 'vs-dark' : 'light'}
             onChange={value => updateFileContent(activeFile.id, value || '')}
             onMount={handleEditorMount}
             options={{
