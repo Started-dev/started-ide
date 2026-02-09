@@ -7,6 +7,7 @@ import { CLAUDE_SYSTEM_PROMPT } from '@/lib/claude-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
+import { streamChat, runCommandRemote } from '@/lib/api-client';
 
 const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
 
@@ -326,7 +327,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     const userMsg: ChatMessage = { id: `msg-${Date.now()}`, role: 'user', content, timestamp: new Date(), contextChips: chips };
     setChatMessages(prev => [...prev, userMsg]);
 
+    // Build context string
     const contextParts: string[] = [];
+    const claudeMd = files.find(f => f.path === '/CLAUDE.md');
+    if (claudeMd && claudeMd.content.trim()) {
+      contextParts.unshift(`[CLAUDE.md — Project Brief]\n${claudeMd.content}`);
+    }
     if (chips) {
       for (const chip of chips) {
         if (chip.type === 'selection') contextParts.push(`[Selected code]\n${chip.content}`);
@@ -334,51 +340,47 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         else if (chip.type === 'errors') contextParts.push(`[Last run errors]\n${chip.content}`);
       }
     }
-    const claudeMd = files.find(f => f.path === '/CLAUDE.md');
-    if (claudeMd && claudeMd.content.trim()) {
-      contextParts.unshift(`[CLAUDE.md — Project Brief]\n${claudeMd.content}`);
-    }
-    const contextBlock = contextParts.length > 0 ? `\n\nContext provided:\n${contextParts.join('\n\n')}` : '';
+    const contextStr = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
 
-    setTimeout(() => {
-      const response = generateMockResponse(content, contextBlock);
-      const assistantMsg: ChatMessage = { id: `msg-${Date.now() + 1}`, role: 'assistant', content: response, timestamp: new Date() };
-      setChatMessages(prev => [...prev, assistantMsg]);
+    // Build conversation history for the API
+    const apiMessages = chatMessages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-10)
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    apiMessages.push({ role: 'user', content });
 
-      const mockToolCalls = generateMockToolCalls(content);
-      if (mockToolCalls.length > 0) {
-        setToolCalls(prev => [...prev, ...mockToolCalls]);
-        for (const tc of mockToolCalls) {
-          // Run hooks
-          const hookResult = evaluateHooks('PreToolUse', tc, hooks);
-          if (hookResult === 'deny') {
-            setToolCalls(prev => prev.map(t =>
-              t.id === tc.id ? { ...t, status: 'denied' as const, result: { ok: false, error: 'Blocked by hook policy' } } : t
-            ));
-            continue;
-          }
+    // Create a placeholder assistant message for streaming
+    const assistantMsgId = `msg-${Date.now() + 1}`;
+    let assistantContent = '';
+    setChatMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date() }]);
 
-          const decision = evaluatePermission(tc, permissionPolicy);
-          if (decision === 'allow') {
-            setTimeout(() => executeAndUpdateTool(tc), 100);
-          } else if (decision === 'deny') {
-            setToolCalls(prev => prev.map(t =>
-              t.id === tc.id ? { ...t, status: 'denied' as const, result: { ok: false, error: 'Blocked by permission policy' } } : t
-            ));
+    streamChat({
+      messages: apiMessages,
+      context: contextStr,
+      onDelta: (chunk) => {
+        assistantContent += chunk;
+        setChatMessages(prev =>
+          prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
+        );
+      },
+      onDone: () => {
+        // After streaming completes, check for diffs in the response
+        const diffRaw = extractDiffFromMessage(assistantContent);
+        if (diffRaw) {
+          const parsed = parseUnifiedDiff(diffRaw);
+          if (parsed.length > 0) {
+            const patchPreview: PatchPreview = { id: `patch-${Date.now()}`, patches: parsed, raw: diffRaw, status: 'preview' };
+            setPendingPatches(prev => [...prev, patchPreview]);
           }
         }
-      }
-
-      const diffRaw = extractDiffFromMessage(response);
-      if (diffRaw) {
-        const parsed = parseUnifiedDiff(diffRaw);
-        if (parsed.length > 0) {
-          const patchPreview: PatchPreview = { id: `patch-${Date.now()}`, patches: parsed, raw: diffRaw, status: 'preview' };
-          setPendingPatches(prev => [...prev, patchPreview]);
-        }
-      }
-    }, 800);
-  }, [files, permissionPolicy, executeAndUpdateTool, hooks]);
+      },
+      onError: (error) => {
+        setChatMessages(prev =>
+          prev.map(m => m.id === assistantMsgId ? { ...m, content: `⚠️ Error: ${error}` } : m)
+        );
+      },
+    });
+  }, [files, chatMessages]);
 
   // ─── Runner Session ───
 
@@ -404,28 +406,38 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setShowOutput(true);
     const run: RunResult = { id: `run-${Date.now()}`, command, status: 'running', logs: `$ ${command}\n`, timestamp: new Date() };
     setRuns(prev => [...prev, run]);
-    try {
-      const session = await ensureSession();
-      const result = await runnerClientRef.current.exec(session.id, { command, timeoutS: 600 });
-      setRunnerSession(prev => prev ? { ...prev, cwd: result.cwd, status: 'ready' } : null);
-      setRuns(prev => prev.map(r =>
-        r.id === run.id
-          ? {
-              ...r,
-              status: result.ok ? 'success' as const : 'error' as const,
-              logs: r.logs + (result.stdout || '') + (result.stderr ? `\nSTDERR:\n${result.stderr}` : '') + `\n\n${result.ok ? '✓' : '✗'} Process exited with code ${result.exitCode}\n`,
-              exitCode: result.exitCode, cwd: result.cwd, durationMs: result.durationMs, sessionId: session.id,
-            }
-          : r
-      ));
-    } catch (err) {
-      setRuns(prev => prev.map(r =>
-        r.id === run.id
-          ? { ...r, status: 'error' as const, logs: r.logs + `\n⚠ Runner error: ${err instanceof Error ? err.message : 'Unknown error'}\n`, exitCode: 1 }
-          : r
-      ));
-    }
-  }, [ensureSession]);
+
+    runCommandRemote({
+      command,
+      cwd: runnerSession?.cwd || '/workspace',
+      timeoutS: 600,
+      onLog: (line) => {
+        setRuns(prev => prev.map(r =>
+          r.id === run.id ? { ...r, logs: r.logs + line } : r
+        ));
+      },
+      onDone: (result) => {
+        setRunnerSession(prev => prev ? { ...prev, cwd: result.cwd, status: 'ready' } : null);
+        setRuns(prev => prev.map(r =>
+          r.id === run.id
+            ? {
+                ...r,
+                status: result.exitCode === 0 ? 'success' as const : 'error' as const,
+                logs: r.logs + `\n${result.exitCode === 0 ? '✓' : '✗'} Process exited with code ${result.exitCode}\n`,
+                exitCode: result.exitCode, cwd: result.cwd, durationMs: result.durationMs,
+              }
+            : r
+        ));
+      },
+      onError: (error) => {
+        setRuns(prev => prev.map(r =>
+          r.id === run.id
+            ? { ...r, status: 'error' as const, logs: r.logs + `\n⚠ Error: ${error}\n`, exitCode: 1 }
+            : r
+        ));
+      },
+    });
+  }, [runnerSession]);
 
   const sendErrorsToChat = useCallback(() => {
     const lastRun = runs[runs.length - 1];
