@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plug, Check, X, Shield, ChevronRight, ChevronDown, Wrench, Key, Loader2, ExternalLink } from 'lucide-react';
 import { MCPServer } from '@/types/agent';
 import { Input } from '@/components/ui/input';
@@ -411,25 +411,98 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
     return s && !s.requiresAuth;
   };
 
+  const MCP_CATEGORIES: { label: string; icon: string; ids: string[] }[] = [
+    { label: 'Development & Cloud', icon: '🛠️', ids: ['mcp-github', 'mcp-vercel', 'mcp-supabase', 'mcp-cloudflare', 'mcp-aws', 'mcp-digitalocean', 'mcp-docker', 'mcp-postgres'] },
+    { label: 'AI & Search', icon: '🤖', ids: ['mcp-huggingface', 'mcp-firecrawl', 'mcp-perplexity', 'mcp-openclaw'] },
+    { label: 'Blockchain & DeFi', icon: '⛓️', ids: ['mcp-evm-rpc', 'mcp-contract-intel', 'mcp-solana', 'mcp-tx-simulator', 'mcp-moralis', 'mcp-coingecko', 'mcp-coinmarketcap', 'mcp-defillama'] },
+    { label: 'CRM & Payments', icon: '💰', ids: ['mcp-salesforce', 'mcp-hubspot', 'mcp-stripe'] },
+    { label: 'Project Management', icon: '📋', ids: ['mcp-jira', 'mcp-monday', 'mcp-asana', 'mcp-trello'] },
+    { label: 'Messaging & Social', icon: '💬', ids: ['mcp-slack', 'mcp-discord', 'mcp-telegram', 'mcp-twilio', 'mcp-sendgrid', 'mcp-twitter', 'mcp-linkedin'] },
+    { label: 'Productivity & Data', icon: '📊', ids: ['mcp-notion', 'mcp-google-sheets', 'mcp-airtable', 'mcp-n8n', 'mcp-zapier'] },
+    { label: 'Finance & Markets', icon: '📈', ids: ['mcp-alpha-vantage'] },
+  ];
+
+  const categorizedServers = useMemo(() => {
+    const serverMap = new Map(servers.map(s => [s.id, s]));
+    const categorized: { label: string; icon: string; servers: typeof servers }[] = [];
+    const usedIds = new Set<string>();
+
+    for (const cat of MCP_CATEGORIES) {
+      const matched = cat.ids.map(id => serverMap.get(id)).filter(Boolean) as typeof servers;
+      if (matched.length > 0) {
+        categorized.push({ label: cat.label, icon: cat.icon, servers: matched });
+        matched.forEach(s => usedIds.add(s.id));
+      }
+    }
+
+    const uncategorized = servers.filter(s => !usedIds.has(s.id));
+    if (uncategorized.length > 0) {
+      categorized.push({ label: 'Other', icon: '🔌', servers: uncategorized });
+    }
+
+    return categorized;
+  }, [servers]);
+
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (label: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="fixed inset-0 bg-background/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-md bg-popover border border-border rounded-lg shadow-2xl overflow-hidden animate-fade-in"
+        className="relative w-full max-w-lg bg-popover border border-border rounded-lg shadow-2xl overflow-hidden animate-fade-in"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Plug className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">MCP Servers</span>
+            <span className="text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground rounded-full">
+              {servers.filter(s => s.enabled).length}/{servers.length} active
+            </span>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded-sm">
             <X className="h-4 w-4 text-muted-foreground" />
           </button>
         </div>
 
-        <div className="max-h-[450px] overflow-auto p-2 space-y-1">
-          {servers.map(server => {
+        <div className="max-h-[500px] overflow-auto p-2 space-y-3">
+          {categorizedServers.map(category => {
+            const isCatCollapsed = collapsedCategories.has(category.label);
+            const enabledCount = category.servers.filter(s => s.enabled).length;
+
+            return (
+              <div key={category.label}>
+                <button
+                  onClick={() => toggleCategory(category.label)}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-accent/30 transition-colors group"
+                >
+                  <span className="text-sm">{category.icon}</span>
+                  <span className="text-xs font-semibold text-foreground tracking-wide uppercase flex-1 text-left">
+                    {category.label}
+                  </span>
+                  {enabledCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                      {enabledCount} on
+                    </span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">{category.servers.length}</span>
+                  {isCatCollapsed
+                    ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                </button>
+
+                {!isCatCollapsed && (
+                  <div className="mt-1 space-y-1 ml-1">
+                    {category.servers.map(server => {
             const isExpanded = expandedId === server.id;
             const isAuth = isAuthServer(server.id);
             const cfg = TOKEN_CONFIG[server.id];
@@ -586,6 +659,11 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
                         {testResult.message}
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            );
+                    })}
                   </div>
                 )}
               </div>
