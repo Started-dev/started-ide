@@ -582,11 +582,81 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setAgentRun(prev => prev ? { ...prev, iteration } : null);
       },
       onPatch: (diff, summary) => {
-        // Create a pending patch for the user to review
+        // Auto-apply agent patches to the file system
         const parsed = parseUnifiedDiff(diff);
         if (parsed.length > 0) {
           const patchPreview: PatchPreview = { id: `patch-${Date.now()}`, patches: parsed, raw: diff, status: 'preview' };
           setPendingPatches(prev => [...prev, patchPreview]);
+
+          // Apply patches immediately for agent mode
+          for (const patch of parsed) {
+            const isNewFile = patch.oldFile === '/dev/null';
+            if (isNewFile) {
+              // Create new file from patch
+              const newContent = patch.hunks
+                .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
+                .join('\n');
+              const name = patch.newFile.split('/').pop() || patch.newFile;
+              const path = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
+              const ext = name.split('.').pop() || '';
+              const langMap: Record<string, string> = {
+                ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
+                jsx: 'javascriptreact', json: 'json', md: 'markdown',
+                py: 'python', css: 'css', html: 'html',
+              };
+
+              // Ensure parent folders exist
+              const pathParts = path.split('/').filter(Boolean);
+              for (let i = 1; i < pathParts.length; i++) {
+                const folderPath = '/' + pathParts.slice(0, i).join('/');
+                const folderName = pathParts[i - 1];
+                setFiles(prev => {
+                  if (prev.some(f => f.path === folderPath && f.isFolder)) return prev;
+                  const parentFolderPath = i > 1 ? '/' + pathParts.slice(0, i - 1).join('/') : null;
+                  const parentFolder = parentFolderPath ? prev.find(f => f.path === parentFolderPath && f.isFolder) : null;
+                  return [...prev, {
+                    id: `folder-${folderPath}`,
+                    name: folderName,
+                    path: folderPath,
+                    content: '',
+                    language: '',
+                    parentId: parentFolder?.id || null,
+                    isFolder: true,
+                  }];
+                });
+              }
+
+              const parentPath = path.split('/').slice(0, -1).join('/') || null;
+              const parentId = parentPath ? `folder-${parentPath}` : null;
+
+              const newFile: IDEFile = {
+                id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                name, path, content: newContent,
+                language: langMap[ext] || 'plaintext',
+                parentId, isFolder: false,
+              };
+              setFiles(prev => [...prev, newFile]);
+              setOpenTabs(prev => [...prev, { fileId: newFile.id, name: newFile.name, path: newFile.path, isModified: false }]);
+              setActiveTabId(newFile.id);
+              saveFile(path, newContent);
+            } else {
+              // Edit existing file
+              const targetPath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
+              setFiles(prev => {
+                const file = prev.find(f => f.path === targetPath);
+                if (!file) return prev;
+                const newContent = applyPatchToContent(file.content, patch);
+                if (newContent === null) return prev;
+                saveFile(targetPath, newContent);
+                return prev.map(f => f.path === targetPath ? { ...f, content: newContent } : f);
+              });
+            }
+          }
+
+          // Mark patch as applied
+          setPendingPatches(prev => prev.map(p =>
+            p.raw === diff ? { ...p, status: 'applied' } : p
+          ));
         }
       },
       onRunCommand: (command, summary) => {
@@ -621,7 +691,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
     // Store abort controller for stop/pause
     (window as any).__agentAbortController = abortController;
-  }, [files, runCommand]);
+  }, [files, runCommand, saveFile]);
 
   const stopAgent = useCallback(() => {
     agentAbortRef.current = true;
