@@ -35,6 +35,7 @@ export interface MCPToolCallRequest {
   jiraDomain?: string;
   sfInstanceUrl?: string;
   sfAccessToken?: string;
+  hubspotToken?: string;
   serverId: string;
 }
 
@@ -92,6 +93,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       body.sf_instance_url = req.sfInstanceUrl;
       body.sf_access_token = req.sfAccessToken;
       break;
+    case 'mcp-hubspot': body.hubspot_token = req.hubspotToken; break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 

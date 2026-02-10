@@ -200,6 +200,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     secondaryLabel: 'Salesforce Instance URL',
     secondaryPlaceholder: 'https://yourorg.my.salesforce.com',
   },
+  'mcp-hubspot': {
+    storageKey: 'hubspot_token',
+    label: 'HubSpot Private App Access Token',
+    placeholder: 'pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    generateUrl: 'https://developers.hubspot.com/docs/api/private-apps',
+    generateLabel: 'Create a private app on HubSpot',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -290,6 +297,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         jiraDomain: serverId === 'mcp-jira' ? (sessionStorage.getItem('jira_domain') || tokenInputs[`${serverId}_region`]) : undefined,
         sfAccessToken: serverId === 'mcp-salesforce' ? token : undefined,
         sfInstanceUrl: serverId === 'mcp-salesforce' ? secondaryVal : undefined,
+        hubspotToken: serverId === 'mcp-hubspot' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

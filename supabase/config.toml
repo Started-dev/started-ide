@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.mcp-salesforce]
 verify_jwt = false
+
+[functions.mcp-hubspot]
+verify_jwt = false
