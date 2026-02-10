@@ -1,150 +1,74 @@
 
 
-# OpenClaw (MoltBot) One-Click Deploy from Started
+# UI Refinements: Toolbar Labels, Modal Selectors, Collab Gating, and Billing Fix
 
-## Overview
+## Changes Overview
 
-Transform the OpenClaw panel from a simple "connect to existing instance" model into a full deployment wizard -- similar to how Emergent deploys MoltBot. Users will be able to install and deploy OpenClaw/MoltBot directly from within Started, with a step-by-step guided flow.
+### 1. Rename "TX" to "Web3" with a Selection Modal
 
-## Current State
+**IDELayout.tsx**: Change the toolbar button label from "TX" to "Web3". Instead of directly opening `TransactionBuilder`, open a new **Web3 modal** that lists available Web3 integrations as selectable cards:
+- Transaction Builder (current `TransactionBuilder` component)
+- TX Simulator (links to the `mcp-tx-simulator` edge function tools)
+- Contract Intel (links to `mcp-contract-intel`)
+- EVM RPC (links to `mcp-evm-rpc`)
+- Solana (links to `mcp-solana`)
+- Web3 Gateway (links to `mcp-web3-gateway`)
 
-The OpenClaw panel currently requires users to manually provide an existing instance URL and API key. There is no way to **provision** or **install** OpenClaw from Started.
+Selecting "Transaction Builder" opens the existing `TransactionBuilder` component. Other items open the MCP config panel pre-filtered to that server, or show a brief description with a "Configure in MCP" action.
 
-## What We'll Build
+**New file**: `src/components/ide/Web3Modal.tsx` -- A selection dialog with icon cards for each Web3 integration.
 
-### 1. New "Install" Tab in OpenClawPanel
+### 2. Rename "Claw" to "Install" with a Selection Modal
 
-Add a new `install` tab to the existing panel (alongside Status, Deploy, Tasks, Skills). This tab provides a 3-step wizard:
+**IDELayout.tsx**: Change the toolbar button label from "Claw" to "Install". Instead of directly opening `OpenClawPanel`, open a new **Install modal** listing available installable tools:
+- OpenClaw / MoltBot (opens the existing `OpenClawPanel`)
+- Future slots can be added here
 
-**Step 1 -- Configure LLM Key**
-- Input field for the user's LLM API key (or use the project's existing AI gateway key)
-- Option to use Started's built-in Lovable AI gateway key (auto-populated)
-- Validation check before proceeding
+This is explicitly separate from MCP -- Installs are full deployable services, not protocol connections.
 
-**Step 2 -- Run Installation**
-- One-click "Install MoltBot" button
-- Calls a new edge function `install-openclaw` that:
-  - Generates a high-entropy slug (32+ bits) for the instance URL
-  - Runs the MoltBot install script via the `run-command` edge function
-  - Streams progress logs back to the UI in real-time
-- Progress bar with live log output (tail of install log)
-- Installation runs in the background; UI polls for completion
-- Auto-refreshes every 10 seconds to check install status
+**New file**: `src/components/ide/InstallModal.tsx` -- A selection dialog. Clicking "OpenClaw / MoltBot" opens the `OpenClawPanel`.
 
-**Step 3 -- Finish and Connect**
-- Shows the generated instance URL and auto-generated API key
-- "Connect" button auto-fills the OpenClaw config (URL + key) and switches to the Status tab
-- Tutorial link displayed prominently: a configurable reference URL
-- Copy-to-clipboard for the instance URL
+### 3. Rename "Perms" to "Permissions"
 
-### 2. New Edge Function: `install-openclaw`
+**IDELayout.tsx**: Change the toolbar button label from `Perms` to `Permissions`.
 
-A backend function that orchestrates the MoltBot installation:
+### 4. Gate Collaboration Behind Pro/Studio Plans
 
-```text
-POST /install-openclaw
-Body: { llm_key, project_id }
+**IDELayout.tsx**: When the user clicks "Collab", check the current plan. If it's `free` or `builder`, show a toast or small dialog saying "Collaboration requires a Pro or Studio plan" instead of opening the panel. Only open `CollaborationPanel` for `pro` or `studio` users.
 
-Flow:
-1. Generate random slug (crypto.randomUUID + extra entropy)
-2. Store install record in `openclaw_installations` table (project_id, slug, status: 'installing')
-3. Execute the install script via run-command:
-   NEW_LLM_KEY="<key>" nohup bash -c "$(curl -fsSL https://moltbot.emergent.to/install.sh)" > /tmp/moltbot_install.log 2>&1 &
-4. Return { install_id, slug, status: 'installing' }
+This requires reading the user's plan from `api_usage_ledger` (already fetched in `IDEContext` or fetching it once).
 
-GET /install-openclaw?install_id=<id>
-Flow:
-1. Check install status (poll log file via run-command: tail -10 /tmp/moltbot_install.log)
-2. Return { status, logs, instance_url (if complete) }
+### 5. Fix "-1 projects" Display to Show "Unlimited"
+
+**UserSettings.tsx line 376**: The current check is `plan.max_projects === 999`. The Studio plan actually has `max_projects: -1`. Update the condition to:
 ```
-
-### 3. Database Table: `openclaw_installations`
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | UUID PK | auto-generated |
-| project_id | UUID | references projects(id) |
-| user_id | UUID | who initiated |
-| slug | text | high-entropy unique slug |
-| instance_url | text | generated URL |
-| status | text | installing, completed, failed |
-| logs | text | last captured log output |
-| created_at | timestamptz | default now() |
-| completed_at | timestamptz | null until done |
-
-RLS: Only the user who created the installation can read/update it.
-
-### 4. Updated OpenClawPanel UI
-
-The panel tabs become: **Install** | Status | Deploy | Tasks | Skills
-
-- If no installation exists for this project, the Install tab is shown by default with the wizard
-- If an installation exists and is complete, it auto-connects and defaults to the Status tab
-- The Install tab shows previous installation history if one exists
-
-The wizard UI uses a stepper component:
-- Step indicators (1, 2, 3) with active/completed/pending states
-- Each step has a card with instructions and action button
-- Live log viewer in Step 2 (scrollable monospace area, auto-scrolls to bottom)
-- Progress indicator (indeterminate during install, checkmark on complete)
-
-### 5. Security Considerations
-
-- Slug generation uses `crypto.getRandomValues()` with 32+ bytes of entropy to prevent guessable URLs
-- LLM keys are never stored in the database -- only passed to the install script at runtime
-- Install logs are truncated to last 50 lines to prevent storage bloat
-- The install edge function validates the user is authenticated and owns the project
+plan.max_projects < 0 || plan.max_projects >= 999 ? 'Unlimited' : plan.max_projects
+```
 
 ---
 
 ## Technical Details
 
-### Files Changed
+### Files Created
+- `src/components/ide/Web3Modal.tsx` -- Grid of Web3 integration cards (TX Builder, TX Simulator, Contract Intel, EVM RPC, Solana, Web3 Gateway). Each card has an icon, title, and description. Clicking one either opens the corresponding component directly or navigates to MCP config.
+- `src/components/ide/InstallModal.tsx` -- Grid of installable services. Currently only OpenClaw/MoltBot. Each card opens the relevant panel.
 
-**New Files:**
-- `supabase/functions/install-openclaw/index.ts` -- Edge function for MoltBot installation orchestration
-- Database migration for `openclaw_installations` table
+### Files Modified
+- `src/components/ide/IDELayout.tsx`:
+  - Import `Web3Modal` and `InstallModal`
+  - Replace `showTxBuilder` state with `showWeb3` state
+  - Replace `showOpenClaw` state with `showInstall` state
+  - Toolbar button "TX" becomes "Web3"
+  - Toolbar button "Claw" becomes "Install"
+  - Toolbar button "Perms" becomes "Permissions"
+  - Add plan-gating logic for Collab button (fetch plan_key from `api_usage_ledger` or pass from context)
+  - Render `Web3Modal` and `InstallModal` instead of directly rendering `TransactionBuilder` / `OpenClawPanel`
 
-**Modified Files:**
-- `src/components/ide/OpenClawPanel.tsx` -- Add Install tab with 3-step wizard, log viewer, polling logic
-- `supabase/config.toml` -- Add `[functions.install-openclaw]` entry
+- `src/pages/UserSettings.tsx`:
+  - Line 376: Change `plan.max_projects === 999` to `plan.max_projects < 0 || plan.max_projects >= 999`
 
-### Install Wizard Flow
-
-```text
-User clicks "Install" tab
-    |
-    v
-Step 1: Enter LLM Key (or use Started gateway)
-    |  [Next]
-    v
-Step 2: Click "Install MoltBot"
-    |  -> POST /install-openclaw { llm_key, project_id }
-    |  -> Returns install_id
-    |  -> Poll GET /install-openclaw?install_id every 10s
-    |  -> Show live logs
-    |  -> Wait for status === 'completed'
-    v
-Step 3: Installation complete!
-    |  -> Show instance URL + API key
-    |  -> "Connect" button auto-fills config
-    |  -> Tutorial link displayed
-    v
-Auto-switch to Status tab (connected)
-```
-
-### Slug Generation (Edge Function)
-
-```typescript
-const bytes = new Uint8Array(16); // 128 bits of entropy
-crypto.getRandomValues(bytes);
-const slug = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-// Result: 32-char hex string like "a3f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6"
-```
-
-### No Breaking Changes
-
-- Existing "connect to external instance" flow remains unchanged
-- The Install tab is additive -- users who already have an OpenClaw instance can skip it entirely
-- All existing tabs (Status, Deploy, Tasks, Skills) continue to work as before
+### Collab Plan Gating Approach
+- Add a state `userPlanKey` in `IDELayout` that fetches the current user's plan from `api_usage_ledger` on mount
+- When "Collab" is clicked, check if `userPlanKey` is `pro` or `studio`; if not, show a toast: "Collaboration is available on Pro and Studio plans. Upgrade in Settings."
+- The OpenClaw MCP (`mcp-openclaw`) remains untouched and continues to work independently as an MCP server connection
 
