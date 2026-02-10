@@ -418,6 +418,22 @@ export const BUILTIN_MCP_SERVERS: MCPServer[] = [
     ],
   },
   {
+    id: 'mcp-zapier',
+    name: 'Zapier',
+    description: 'Trigger Zaps via webhooks and automate workflows',
+    icon: '⚡',
+    enabled: false,
+    requiresAuth: true,
+    authConfigured: false,
+    tools: [
+      { name: 'zapier_trigger_webhook', description: 'Trigger a Zap webhook', inputSchema: { payload: { type: 'object' } } },
+      { name: 'zapier_trigger_with_data', description: 'Trigger with structured data + metadata', inputSchema: { data: { type: 'object' }, metadata: { type: 'object' } } },
+      { name: 'zapier_validate_webhook', description: 'Validate a Zapier webhook URL', inputSchema: { webhook_url: { type: 'string' } } },
+      { name: 'zapier_trigger_catch_hook', description: 'Trigger a Catch Hook', inputSchema: { payload: { type: 'object' } } },
+      { name: 'zapier_multi_trigger', description: 'Trigger multiple webhooks at once', inputSchema: { webhook_urls: { type: 'array' }, payload: { type: 'object' } } },
+    ],
+  },
+  {
     id: 'mcp-firecrawl',
     name: 'Firecrawl',
     description: 'AI-powered web scraping, search, and crawling',

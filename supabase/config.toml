@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.mcp-twilio]
 verify_jwt = false
+
+[functions.mcp-zapier]
+verify_jwt = false

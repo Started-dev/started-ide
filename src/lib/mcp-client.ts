@@ -28,6 +28,7 @@ export interface MCPToolCallRequest {
   linkedinToken?: string;
   twilioAccountSid?: string;
   twilioAuthToken?: string;
+  zapierWebhookUrl?: string;
   serverId: string;
 }
 
@@ -74,6 +75,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       body.twilio_account_sid = req.twilioAccountSid;
       body.twilio_auth_token = req.twilioAuthToken;
       break;
+    case 'mcp-zapier': body.zapier_webhook_url = req.zapierWebhookUrl; break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 

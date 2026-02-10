@@ -165,6 +165,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     secondaryLabel: 'Twilio Auth Token',
     secondaryPlaceholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
   },
+  'mcp-zapier': {
+    storageKey: 'zapier_webhook_url',
+    label: 'Zapier Webhook URL',
+    placeholder: 'https://hooks.zapier.com/hooks/catch/...',
+    generateUrl: 'https://zapier.com/app/zaps',
+    generateLabel: 'Create a Zap with Webhook trigger',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -248,6 +255,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         linkedinToken: serverId === 'mcp-linkedin' ? token : undefined,
         twilioAccountSid: serverId === 'mcp-twilio' ? token : undefined,
         twilioAuthToken: serverId === 'mcp-twilio' ? secondaryVal : undefined,
+        zapierWebhookUrl: serverId === 'mcp-zapier' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
