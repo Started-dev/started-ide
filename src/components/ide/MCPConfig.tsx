@@ -323,7 +323,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
 
         <div className="px-4 py-2.5 border-t border-border">
           <p className="text-[10px] text-muted-foreground">
-            MCP servers extend Claude's capabilities. Tokens are stored in your browser session only.
+            MCP servers extend Started's capabilities. Tokens are stored in your browser session only.
           </p>
         </div>
       </div>

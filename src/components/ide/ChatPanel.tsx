@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, AtSign, FileCode, AlertCircle, Sparkles, Brain } from 'lucide-react';
+import { Send, AtSign, FileCode, AlertCircle, Brain } from 'lucide-react';
+import startedLogo from '@/assets/started-logo.png';
 import { useIDE } from '@/contexts/IDEContext';
 import { ContextChip } from '@/types/ide';
 import { PermissionPrompt } from './PermissionPrompt';
@@ -74,8 +75,8 @@ export function ChatPanel() {
     <div className="h-full flex flex-col bg-card">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <Sparkles className="h-4 w-4 text-primary" />
-        <span className="text-xs font-semibold uppercase tracking-wider">Claude</span>
+        <img src={startedLogo} alt="Started" className="h-4 w-4 rounded-full" />
+        <span className="text-xs font-semibold uppercase tracking-wider">Started</span>
         {pendingTools.length > 0 && (
           <span className="ml-auto text-[10px] px-1.5 py-0.5 bg-ide-warning/15 text-ide-warning rounded-sm animate-pulse">
             {pendingTools.length} pending
@@ -171,7 +172,7 @@ export function ChatPanel() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={agentMode ? 'Describe a goal for the agent...' : 'Ask Claude...'}
+            placeholder={agentMode ? 'Describe a goal for the agent...' : 'Ask Started...'}
             className="flex-1 bg-input text-foreground text-sm px-3 py-2 rounded-md border border-border resize-none outline-none focus:border-primary transition-colors min-h-[36px] max-h-[120px] font-sans"
             rows={1}
           />

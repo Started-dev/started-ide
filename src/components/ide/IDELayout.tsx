@@ -65,8 +65,8 @@ export function IDELayout() {
   }, [toggleChat, toggleOutput, runCommand, sendMessage, selectedText]);
 
   const openProjectBrief = () => {
-    const claudeFile = files.find(f => f.path === '/CLAUDE.md');
-    if (claudeFile) openFile(claudeFile.id);
+    const startedFile = files.find(f => f.path === '/STARTED.md');
+    if (startedFile) openFile(startedFile.id);
   };
 
   const isAgentActive = agentRun?.status === 'running' || agentRun?.status === 'queued';
@@ -100,7 +100,7 @@ export function IDELayout() {
           <button
             onClick={openProjectBrief}
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
-            title="Edit CLAUDE.md (Project Brief)"
+            title="Edit STARTED.md (Project Brief)"
           >
             <BookOpen className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Brief</span>

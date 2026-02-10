@@ -46,15 +46,15 @@ export function OutputPanel() {
           )}
         </div>
         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-          {/* Send errors to Claude button */}
+          {/* Send errors to Started button */}
           {hasErrors && (
             <button
               onClick={sendErrorsToChat}
               className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-ide-error/10 text-ide-error rounded-sm hover:bg-ide-error/20 transition-colors"
-              title="Send errors to Claude for analysis"
+              title="Send errors to Started for analysis"
             >
               <Send className="h-2.5 w-2.5" />
-              Ask Claude
+              Ask Started
             </button>
           )}
           {runnerSession && (

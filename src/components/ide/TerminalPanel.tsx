@@ -169,10 +169,10 @@ export function TerminalPanel() {
             <button
               onClick={sendErrorsToChat}
               className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-ide-error/10 text-ide-error rounded-sm hover:bg-ide-error/20 transition-colors"
-              title="Send errors to Claude"
+              title="Send errors to Started"
             >
               <Send className="h-2.5 w-2.5" />
-              Ask Claude
+              Ask Started
             </button>
           )}
           {runnerSession && (

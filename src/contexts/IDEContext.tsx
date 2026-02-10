@@ -16,10 +16,10 @@ import type { Snapshot } from '@/hooks/use-file-snapshots';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import type { Collaborator, CollabMessage, FileLock, PresenceUser } from '@/hooks/use-collaboration';
 
-const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
+const STARTED_MD_CONTENT = `# Project Brief (STARTED.md)
 
-This file is loaded as default context for every Claude conversation.
-Edit it to give Claude persistent knowledge about your project.
+This file is loaded as default context for every Started conversation.
+Edit it to give Started persistent knowledge about your project.
 
 ## Project Overview
 A simple TypeScript demo project.
@@ -36,10 +36,10 @@ A simple TypeScript demo project.
 
 const DEMO_FILES: IDEFile[] = [
   { id: 'root-src', name: 'src', path: '/src', content: '', language: '', parentId: null, isFolder: true },
-  { id: 'f-claude-md', name: 'CLAUDE.md', path: '/CLAUDE.md', content: CLAUDE_MD_CONTENT, language: 'markdown', parentId: null, isFolder: false },
-  { id: 'f-main', name: 'main.ts', path: '/src/main.ts', content: `import { greet } from './utils';\n\nconst name = process.argv[2] || 'World';\nconsole.log(greet(name));\nconsole.log('Claude Code Cloud IDE is running!');\n`, language: 'typescript', parentId: 'root-src', isFolder: false },
-  { id: 'f-utils', name: 'utils.ts', path: '/src/utils.ts', content: `export function greet(name: string): string {\n  return \`Hello, \${name}! Welcome to Claude Code.\`;\n}\n\nexport function add(a: number, b: number): number {\n  return a + b;\n}\n`, language: 'typescript', parentId: 'root-src', isFolder: false },
-  { id: 'f-readme', name: 'README.md', path: '/README.md', content: `# Demo Project\n\nA simple TypeScript project to demonstrate the Claude Code Cloud IDE.\n\n## Getting Started\n\n\`\`\`bash\nnpm install\nnpm start\n\`\`\`\n\n## Features\n\n- TypeScript support\n- Claude AI assistance\n- Live preview\n`, language: 'markdown', parentId: null, isFolder: false },
+  { id: 'f-started-md', name: 'STARTED.md', path: '/STARTED.md', content: STARTED_MD_CONTENT, language: 'markdown', parentId: null, isFolder: false },
+  { id: 'f-main', name: 'main.ts', path: '/src/main.ts', content: `import { greet } from './utils';\n\nconst name = process.argv[2] || 'World';\nconsole.log(greet(name));\nconsole.log('Started Cloud IDE is running!');\n`, language: 'typescript', parentId: 'root-src', isFolder: false },
+  { id: 'f-utils', name: 'utils.ts', path: '/src/utils.ts', content: `export function greet(name: string): string {\n  return \`Hello, \${name}! Welcome to Started.\`;\n}\n\nexport function add(a: number, b: number): number {\n  return a + b;\n}\n`, language: 'typescript', parentId: 'root-src', isFolder: false },
+  { id: 'f-readme', name: 'README.md', path: '/README.md', content: `# Demo Project\n\nA simple TypeScript project to demonstrate the Started Cloud IDE.\n\n## Getting Started\n\n\`\`\`bash\nnpm install\nnpm start\n\`\`\`\n\n## Features\n\n- TypeScript support\n- AI assistance\n- Live preview\n`, language: 'markdown', parentId: null, isFolder: false },
   { id: 'f-pkg', name: 'package.json', path: '/package.json', content: `{\n  "name": "demo-project",\n  "version": "1.0.0",\n  "main": "src/main.ts",\n  "scripts": {\n    "start": "ts-node src/main.ts",\n    "test": "jest"\n  }\n}\n`, language: 'json', parentId: null, isFolder: false },
   { id: 'f-tsconfig', name: 'tsconfig.json', path: '/tsconfig.json', content: `{\n  "compilerOptions": {\n    "target": "ES2020",\n    "module": "commonjs",\n    "strict": true,\n    "outDir": "./dist"\n  },\n  "include": ["src/**/*"]\n}\n`, language: 'json', parentId: null, isFolder: false },
 ];
@@ -150,7 +150,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome', role: 'assistant',
-      content: "Hello! I'm Claude, your AI coding assistant. I can help you write, debug, and refactor code. Select some code or mention a file to get started.\n\nTry asking me to:\n- Explain a function\n- Add error handling\n- Write tests\n- Refactor code\n\n**Agent Mode**: Click the 🧠 Agent tab to run autonomous multi-step tasks.",
+      content: "Hello! I'm Started, your AI coding assistant. I can help you write, debug, and refactor code. Select some code or mention a file to get started.\n\nTry asking me to:\n- Explain a function\n- Add error handling\n- Write tests\n- Refactor code\n\n**Agent Mode**: Click the 🧠 Agent tab to run autonomous multi-step tasks.",
       timestamp: new Date(),
     },
   ]);
@@ -411,9 +411,9 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
     // Build context string
     const contextParts: string[] = [];
-    const claudeMd = files.find(f => f.path === '/CLAUDE.md');
-    if (claudeMd && claudeMd.content.trim()) {
-      contextParts.unshift(`[CLAUDE.md — Project Brief]\n${claudeMd.content}`);
+    const startedMd = files.find(f => f.path === '/STARTED.md');
+    if (startedMd && startedMd.content.trim()) {
+      contextParts.unshift(`[STARTED.md — Project Brief]\n${startedMd.content}`);
     }
     if (chips) {
       for (const chip of chips) {
@@ -804,13 +804,13 @@ function generateMockToolCalls(userMessage: string): ToolCall[] {
 function generateMockResponse(userMessage: string, context: string): string {
   const lc = userMessage.toLowerCase();
   if (lc.includes('test')) {
-    return `**Plan:**\n- Add unit tests for \`greet\` and \`add\` functions\n- Use Jest as the testing framework\n- Cover edge cases and boundary conditions\n\n\`\`\`diff\n--- /dev/null\n+++ src/utils.test.ts\n@@ -0,0 +1,19 @@\n+import { greet, add } from './utils';\n+\n+describe('greet', () => {\n+  it('should greet with name', () => {\n+    expect(greet('Claude')).toBe('Hello, Claude! Welcome to Claude Code.');\n+  });\n+});\n+\n+describe('add', () => {\n+  it('should add two numbers', () => {\n+    expect(add(2, 3)).toBe(5);\n+  });\n+\n+  it('should handle negative numbers', () => {\n+    expect(add(-1, 1)).toBe(0);\n+  });\n+});\n\`\`\`\n\n\`\`\`\nnpm test\n\`\`\``;
+    return `**Plan:**\n- Add unit tests for \`greet\` and \`add\` functions\n- Use Jest as the testing framework\n- Cover edge cases and boundary conditions\n\n\`\`\`diff\n--- /dev/null\n+++ src/utils.test.ts\n@@ -0,0 +1,19 @@\n+import { greet, add } from './utils';\n+\n+describe('greet', () => {\n+  it('should greet with name', () => {\n+    expect(greet('Started')).toBe('Hello, Started! Welcome to Started.');\n+  });\n+});\n+\n+describe('add', () => {\n+  it('should add two numbers', () => {\n+    expect(add(2, 3)).toBe(5);\n+  });\n+\n+  it('should handle negative numbers', () => {\n+    expect(add(-1, 1)).toBe(0);\n+  });\n+});\n\`\`\`\n\n\`\`\`\nnpm test\n\`\`\``;
   }
   if (lc.includes('fix') || lc.includes('bug') || lc.includes('error')) {
     return `**Plan:**\n- Inspect the reported issue${context ? ' with provided context' : ''}\n- Identify root cause\n- Apply minimal fix\n\nI'd need to see the specific error output. Attach \`@errors:lastRun\` or paste the stack trace so I can generate a precise patch.`;
   }
   if (lc.includes('refactor') || lc.includes('improve') || lc.includes('clean')) {
-    return `**Plan:**\n- Review current implementation${context ? '\n- Analyze provided context' : ''}\n- Extract reusable helpers\n- Improve type safety\n\n\`\`\`diff\n--- a/src/utils.ts\n+++ b/src/utils.ts\n@@ -1,4 +1,8 @@\n+/** Generates a greeting message for the given name. */\n export function greet(name: string): string {\n+  if (!name?.trim()) {\n+    throw new Error('Name must be a non-empty string');\n+  }\n   return \`Hello, \${name}! Welcome to Claude Code.\`;\n }\n\`\`\`\n\n\`\`\`\nnpm test\n\`\`\`\n\n**Notes:** Added input validation and JSDoc. Run tests to verify nothing breaks.`;
+    return `**Plan:**\n- Review current implementation${context ? '\n- Analyze provided context' : ''}\n- Extract reusable helpers\n- Improve type safety\n\n\`\`\`diff\n--- a/src/utils.ts\n+++ b/src/utils.ts\n@@ -1,4 +1,8 @@\n+/** Generates a greeting message for the given name. */\n export function greet(name: string): string {\n+  if (!name?.trim()) {\n+    throw new Error('Name must be a non-empty string');\n+  }\n   return \`Hello, \${name}! Welcome to Started.\`;\n }\n\`\`\`\n\n\`\`\`\nnpm test\n\`\`\`\n\n**Notes:** Added input validation and JSDoc. Run tests to verify nothing breaks.`;
   }
   return `**Plan:**\n- Analyze request${context ? ' with provided context' : ''}\n- Identify relevant files\n- Propose minimal changes\n\nI've reviewed your request. Here's what I suggest:\n\n1. The current code structure looks solid\n2. I can help with specific changes — try selecting code and using \`@selection\`, or attach a file with \`@file\`\n3. For bug fixes, attach \`@errors\` from the last run\n\nWhat specific change would you like me to make?`;
 }
