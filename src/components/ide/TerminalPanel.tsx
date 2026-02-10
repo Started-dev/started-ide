@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronUp, ChevronDown, Play, Terminal, Square, CheckCircle, XCircle, Loader2, Clock, FolderOpen, Cpu, Send, Trash2, Plus, X, Globe } from 'lucide-react';
+import { ChevronUp, ChevronDown, Play, Terminal, Square, CheckCircle, XCircle, Loader2, Clock, FolderOpen, Cpu, Send, Trash2, Plus, X, Globe, ChevronRight } from 'lucide-react';
 import { useIDE } from '@/contexts/IDEContext';
 import { BrowserPreview, detectServerUrl } from './BrowserPreview';
+import { RUNTIME_TEMPLATES } from '@/types/runner';
+import type { RuntimeType } from '@/types/runner';
 
 interface TerminalTab {
   id: string;
@@ -10,7 +12,9 @@ interface TerminalTab {
 }
 
 export function TerminalPanel() {
-  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess, sendErrorsToChat } = useIDE();
+  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess, sendErrorsToChat, project, setRuntimeType } = useIDE();
+  const [runtimeOpen, setRuntimeOpen] = useState(false);
+  const runtimeRef = useRef<HTMLDivElement>(null);
 
   const [tabs, setTabs] = useState<TerminalTab[]>([
     { id: 'output', label: 'Output', type: 'output' },
@@ -57,6 +61,17 @@ export function TerminalPanel() {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [showOutput, activeTab, currentTab?.type]);
+
+  // Close runtime dropdown on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (runtimeRef.current && !runtimeRef.current.contains(e.target as Node)) {
+        setRuntimeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleRun = useCallback(() => {
     const cmd = commandInput.trim();
@@ -220,12 +235,32 @@ export function TerminalPanel() {
               Ask Started
             </button>
           )}
-          {runnerSession && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+          <div className="relative" ref={runtimeRef}>
+            <button
+              onClick={() => setRuntimeOpen(prev => !prev)}
+              className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono px-1.5 py-0.5 rounded-sm hover:bg-accent/30 transition-colors"
+              title="Select runtime"
+            >
               <Cpu className="h-3 w-3" />
-              {runnerSession.runtimeType}
-            </span>
-          )}
+              {RUNTIME_TEMPLATES.find(t => t.type === project.runtimeType)?.label || project.runtimeType}
+              <ChevronRight className={`h-2.5 w-2.5 transition-transform ${runtimeOpen ? 'rotate-90' : ''}`} />
+            </button>
+            {runtimeOpen && (
+              <div className="absolute bottom-full right-0 mb-1 w-40 max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md z-50">
+                {RUNTIME_TEMPLATES.map(rt => (
+                  <button
+                    key={rt.type}
+                    onClick={() => { setRuntimeType(rt.type as RuntimeType); setRuntimeOpen(false); }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-accent transition-colors ${
+                      project.runtimeType === rt.type ? 'bg-accent font-semibold' : ''
+                    }`}
+                  >
+                    {rt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={clearTerminal}
             className="p-1 text-muted-foreground hover:text-foreground rounded-sm hover:bg-accent/30 transition-colors"

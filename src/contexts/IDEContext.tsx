@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip, Conversation } from '@/types/ide';
 import { ToolCall, ToolName, PatchPreview, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
-import { RunnerSession } from '@/types/runner';
+import { RunnerSession, RuntimeType } from '@/types/runner';
 import { AgentRun, AgentStep, Hook, DEFAULT_HOOKS, MCPServer, BUILTIN_MCP_SERVERS } from '@/types/agent';
 import { STARTED_SYSTEM_PROMPT } from '@/lib/started-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
@@ -50,6 +50,7 @@ const DEMO_FILES: IDEFile[] = [
 
 interface IDEContextType {
   project: Project;
+  setRuntimeType: (rt: RuntimeType) => void;
   files: IDEFile[];
   openTabs: OpenTab[];
   activeTabId: string | null;
@@ -956,7 +957,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <IDEContext.Provider value={{
-      project, files, openTabs, activeTabId, chatMessages, runs,
+      project, setRuntimeType: (rt: RuntimeType) => setProject(p => ({ ...p, runtimeType: rt })),
+      files, openTabs, activeTabId, chatMessages, runs,
       showOutput, showChat, selectedText, setSelectedText,
       openFile, closeTab, setActiveTab: setActiveTabId,
       updateFileContent, createFile, deleteFile, renameFile,
