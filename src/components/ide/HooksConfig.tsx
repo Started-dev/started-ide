@@ -209,13 +209,13 @@ export function HooksConfig({
 
         <Tabs defaultValue="agent" className="w-full">
           <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-9 px-2">
-            <TabsTrigger value="agent" className="text-xs data-[state=active]:bg-muted gap-1" onClick={() => setAddTab('agent')}>
+            <TabsTrigger value="agent" className="text-xs data-[state=active]:bg-muted gap-1" onClick={() => { setAddTab('agent'); setShowAdd(false); }}>
               <Zap className="h-3 w-3" /> Agent
             </TabsTrigger>
-            <TabsTrigger value="webhooks" className="text-xs data-[state=active]:bg-muted gap-1" onClick={() => setAddTab('webhook')}>
+            <TabsTrigger value="webhooks" className="text-xs data-[state=active]:bg-muted gap-1" onClick={() => { setAddTab('webhook'); setShowAdd(false); }}>
               <Globe className="h-3 w-3" /> Webhooks
             </TabsTrigger>
-            <TabsTrigger value="events" className="text-xs data-[state=active]:bg-muted gap-1" onClick={() => setAddTab('event')}>
+            <TabsTrigger value="events" className="text-xs data-[state=active]:bg-muted gap-1" onClick={() => { setAddTab('event'); setShowAdd(false); }}>
               <Bell className="h-3 w-3" /> Events
             </TabsTrigger>
           </TabsList>
