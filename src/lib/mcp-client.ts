@@ -11,6 +11,7 @@ export interface MCPToolCallRequest {
   awsSecretAccessKey?: string;
   awsRegion?: string;
   stripeToken?: string;
+  slackToken?: string;
   serverId: string;
 }
 
@@ -20,7 +21,7 @@ export interface MCPToolCallResult {
   error?: string;
 }
 
-export async function callMCPTool({ tool, input, githubToken, vercelToken, supabaseToken, cloudflareToken, awsAccessKeyId, awsSecretAccessKey, awsRegion, stripeToken, serverId }: MCPToolCallRequest): Promise<MCPToolCallResult> {
+export async function callMCPTool({ tool, input, githubToken, vercelToken, supabaseToken, cloudflareToken, awsAccessKeyId, awsSecretAccessKey, awsRegion, stripeToken, slackToken, serverId }: MCPToolCallRequest): Promise<MCPToolCallResult> {
   const functionName = serverId;
   const body: Record<string, unknown> = { tool, input };
 
@@ -38,6 +39,8 @@ export async function callMCPTool({ tool, input, githubToken, vercelToken, supab
     body.aws_region = awsRegion || 'us-east-1';
   } else if (serverId === 'mcp-stripe') {
     body.stripe_token = stripeToken;
+  } else if (serverId === 'mcp-slack') {
+    body.slack_token = slackToken;
   }
 
   const { data, error } = await supabase.functions.invoke(functionName, { body });

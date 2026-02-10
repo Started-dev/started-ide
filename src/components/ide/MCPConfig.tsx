@@ -58,6 +58,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://dashboard.stripe.com/apikeys',
     generateLabel: 'Get API keys from Stripe Dashboard',
   },
+  'mcp-slack': {
+    storageKey: 'slack_bot_token',
+    label: 'Slack Bot Token',
+    placeholder: 'xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx',
+    generateUrl: 'https://api.slack.com/apps',
+    generateLabel: 'Create a Slack app and get Bot Token',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -122,6 +129,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         awsSecretAccessKey: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_secret_access_key') || tokenInputs[`${serverId}_secondary`]) : undefined,
         awsRegion: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_region') || 'us-east-1') : undefined,
         stripeToken: serverId === 'mcp-stripe' ? token : undefined,
+        slackToken: serverId === 'mcp-slack' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

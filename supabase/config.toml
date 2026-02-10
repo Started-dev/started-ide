@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.mcp-stripe]
 verify_jwt = false
+
+[functions.mcp-slack]
+verify_jwt = false
