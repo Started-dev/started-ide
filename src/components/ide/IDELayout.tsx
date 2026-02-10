@@ -233,6 +233,12 @@ export function IDELayout() {
                     agentRun={agentRun}
                     onStop={stopAgent}
                     onPause={pauseAgent}
+                    onOpenFile={(path) => {
+                      const file = files.find(f => f.path === path || `/${f.path}` === path);
+                      if (file) {
+                        openFile(file.id);
+                      }
+                    }}
                   />
                 )}
               </Panel>
