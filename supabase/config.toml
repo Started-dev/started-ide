@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.mcp-discord]
 verify_jwt = false
+
+[functions.mcp-trello]
+verify_jwt = false

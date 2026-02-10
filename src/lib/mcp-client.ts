@@ -39,6 +39,8 @@ export interface MCPToolCallRequest {
   mondayToken?: string;
   asanaToken?: string;
   discordBotToken?: string;
+  trelloApiKey?: string;
+  trelloToken?: string;
   serverId: string;
 }
 
@@ -100,6 +102,10 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
     case 'mcp-monday': body.monday_token = req.mondayToken; break;
     case 'mcp-asana': body.asana_token = req.asanaToken; break;
     case 'mcp-discord': body.discord_bot_token = req.discordBotToken; break;
+    case 'mcp-trello':
+      body.trello_api_key = req.trelloApiKey;
+      body.trello_token = req.trelloToken;
+      break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 

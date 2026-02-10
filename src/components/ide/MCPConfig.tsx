@@ -228,6 +228,16 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://discord.com/developers/applications',
     generateLabel: 'Create a bot in Discord Developer Portal',
   },
+  'mcp-trello': {
+    storageKey: 'trello_api_key',
+    label: 'Trello API Key',
+    placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://trello.com/power-ups/admin',
+    generateLabel: 'Get API key from Trello',
+    secondaryKey: 'trello_token',
+    secondaryLabel: 'Trello Token',
+    secondaryPlaceholder: 'ATTA...',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -322,6 +332,8 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         mondayToken: serverId === 'mcp-monday' ? token : undefined,
         asanaToken: serverId === 'mcp-asana' ? token : undefined,
         discordBotToken: serverId === 'mcp-discord' ? token : undefined,
+        trelloApiKey: serverId === 'mcp-trello' ? token : undefined,
+        trelloToken: serverId === 'mcp-trello' ? secondaryVal : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
