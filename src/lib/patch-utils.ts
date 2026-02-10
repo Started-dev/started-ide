@@ -99,7 +99,7 @@ export function applyPatchToContent(content: string, patch: ParsedPatch): string
 }
 
 /**
- * Extract diff blocks from a Claude response message.
+ * Extract diff blocks from an AI response message.
  */
 export function extractDiffFromMessage(message: string): string | null {
   const diffMatch = message.match(/```diff\n([\s\S]*?)```/);
@@ -107,7 +107,7 @@ export function extractDiffFromMessage(message: string): string | null {
 }
 
 /**
- * Extract suggested commands from a Claude response message.
+ * Extract suggested commands from an AI response message.
  */
 export function extractCommandsFromMessage(message: string): string[] {
   // Match fenced code blocks after "Commands:" or standalone blocks that look like commands

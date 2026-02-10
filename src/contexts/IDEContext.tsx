@@ -3,7 +3,7 @@ import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip } from '
 import { ToolCall, ToolName, PatchPreview, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
 import { RunnerSession } from '@/types/runner';
 import { AgentRun, AgentStep, Hook, DEFAULT_HOOKS, MCPServer, BUILTIN_MCP_SERVERS } from '@/types/agent';
-import { CLAUDE_SYSTEM_PROMPT } from '@/lib/claude-prompt';
+import { STARTED_SYSTEM_PROMPT } from '@/lib/started-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
@@ -189,7 +189,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (persistenceLoading) return;
 
     if (projectId) {
-      setProject(prev => ({ ...prev, id: projectId }));
+      const projectInfo = projects.find(p => p.id === projectId);
+      setProject(prev => ({ ...prev, id: projectId, name: projectInfo?.name || prev.name }));
     }
 
     if (initialFiles && initialFiles.length > 0) {
@@ -204,11 +205,20 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setActiveTabId(null);
       }
     } else if (projectId && !initialFiles) {
-      // No files in DB — seed with demo files
+      // No files in DB — seed with demo files and update state immediately
+      setFiles(DEMO_FILES);
       saveAllFiles(DEMO_FILES);
+      const firstFile = DEMO_FILES.find(f => !f.isFolder);
+      if (firstFile) {
+        setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+        setActiveTabId(firstFile.id);
+      } else {
+        setOpenTabs([]);
+        setActiveTabId(null);
+      }
     }
     setFilesReady(true);
-  }, [persistenceLoading, projectId, initialFiles, saveAllFiles]);
+  }, [persistenceLoading, projectId, initialFiles, saveAllFiles, projects]);
 
   const getFileById = useCallback((id: string) => files.find(f => f.id === id), [files]);
 

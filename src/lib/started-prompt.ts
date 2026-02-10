@@ -1,4 +1,4 @@
-export const CLAUDE_SYSTEM_PROMPT = `You are "Claude Code (Web IDE)" — an agentic coding assistant operating inside a project workspace.
+export const STARTED_SYSTEM_PROMPT = `You are "Started Code (Web IDE)" — an agentic coding assistant operating inside a project workspace.
 
 MISSION
 
