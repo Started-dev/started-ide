@@ -23,22 +23,167 @@ import type { Snapshot } from '@/hooks/use-file-snapshots';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import type { Collaborator, CollabMessage, FileLock, PresenceUser } from '@/hooks/use-collaboration';
 
-const STARTED_MD_CONTENT = `# Project Brief (STARTED.md)
+export const STARTED_MD_CONTENT = `# Started Project Brief
 
-This file is loaded as default context for every Started conversation.
-Edit it to give Started persistent knowledge about your project.
+This project is managed inside **Started.dev**.
+AI agents and automated tools may read, modify, and run code in this repository
+according to the rules defined below.
 
-## Project Overview
-A simple TypeScript demo project.
+This document is the **source of truth** for how changes should be made.
 
-## Conventions
-- Use TypeScript strict mode
-- Prefer functional style
-- Run \`npm test\` to verify changes
+---
 
-## Important Files
-- \`src/main.ts\` — entry point
-- \`src/utils.ts\` — shared utilities
+## 1. Project Overview
+
+**Purpose:**
+> Describe what this project does in 1–3 sentences.
+
+**Primary Language(s):**
+- (e.g. TypeScript, Python, Solidity)
+
+**Frameworks / Tooling:**
+- (e.g. Node.js, Next.js, Foundry, Hardhat, React)
+
+**Runtime Environment:**
+- (e.g. Node 18, Deno, Browser, EVM)
+
+---
+
+## 2. How to Run, Build, and Test
+
+**Install dependencies:**
+\\\`\\\`\\\`bash
+npm install
+\\\`\\\`\\\`
+
+**Run locally:**
+\\\`\\\`\\\`bash
+npm run start
+\\\`\\\`\\\`
+
+**Run tests:**
+\\\`\\\`\\\`bash
+npm test
+\\\`\\\`\\\`
+
+**Build / compile:**
+\\\`\\\`\\\`bash
+npm run build
+\\\`\\\`\\\`
+
+If any of these commands change, update this file immediately.
+
+---
+
+## 3. Repository Structure
+
+\\\`\\\`\\\`
+/src        -> main application logic
+/tests      -> automated tests
+/scripts    -> tooling / automation
+\\\`\\\`\\\`
+
+Highlight:
+- entry points
+- config files
+- generated code (if any)
+
+---
+
+## 4. Coding Standards
+
+Follow these rules strictly:
+- Prefer clarity over cleverness
+- Small, focused functions
+- Avoid unnecessary abstractions
+- Keep changes minimal and scoped
+- Do not reformat unrelated code
+
+**Style:**
+- Indentation: 2 spaces
+- Quotes: single quotes
+- Semicolons: yes
+
+---
+
+## 5. AI Change Policy (IMPORTANT)
+
+**AI agents must:**
+- Always inspect files before editing
+- Use unified diffs for changes
+- Prefer small patches over large rewrites
+- Run tests or builds when possible
+- Explain the intent of changes clearly
+
+**AI agents must NOT:**
+- Touch .env, secrets, or credentials without explicit permission
+- Introduce new dependencies unless necessary
+- Modify files outside the stated scope
+- Run destructive commands
+
+---
+
+## 6. Terminal & Runner Rules
+
+- Commands should be safe and minimal
+- Prefer read-only inspection commands first
+- Avoid network access unless required
+- Never run destructive or privileged commands
+
+If a command fails:
+1. Read the error
+2. Fix the root cause
+3. Re-run verification
+
+---
+
+## 7. Autonomous Agent Rules
+
+When Agent Mode is enabled:
+- Break work into steps
+- Verify progress after each step
+- Stop if blocked or uncertain
+- Do not repeat failing actions endlessly
+- Require confirmation for risky actions (deploys, pushes, state changes)
+
+---
+
+## 8. Testing & Verification Expectations
+
+- Existing tests must pass before declaring success
+- If no tests exist:
+  - Suggest adding tests for non-trivial changes
+- Clearly report verification results
+
+---
+
+## 9. Web3 / MCP Rules (If Applicable)
+
+- Prefer MCP tools over guessing on-chain data
+- Treat blockchain data as read-only unless authorized
+- Never generate or expose private keys
+- Simulate before deploying
+- Explain risks before any state-changing action
+
+---
+
+## 10. Definition of Done
+
+A task is complete when:
+- The requested change is implemented
+- Code builds or tests pass (or failures are explained)
+- The solution is safe, minimal, and production-ready
+- The intent and outcome are clearly communicated
+
+---
+
+## 11. Notes for Humans
+
+Use this space for:
+- architectural decisions
+- known limitations
+- future plans
+- warnings or edge cases
 `;
 
 const DEMO_FILES: IDEFile[] = [
