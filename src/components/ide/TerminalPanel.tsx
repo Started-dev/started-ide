@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronUp, ChevronDown, Play, Terminal, Square, CheckCircle, XCircle, Loader2, Clock, FolderOpen, Cpu, Send, Trash2, Plus, X, Globe, ChevronRight } from 'lucide-react';
 import { useIDE } from '@/contexts/IDEContext';
 import { BrowserPreview, detectServerUrl } from './BrowserPreview';
+import { PermissionPrompt } from './PermissionPrompt';
 import { RUNTIME_TEMPLATES } from '@/types/runner';
 import type { RuntimeType } from '@/types/runner';
 
@@ -12,7 +13,7 @@ interface TerminalTab {
 }
 
 export function TerminalPanel() {
-  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess, sendErrorsToChat, project, setRuntimeType } = useIDE();
+  const { runs, runCommand, showOutput, toggleOutput, runnerSession, killRunningProcess, sendErrorsToChat, project, setRuntimeType, pendingPermission, approvePermission, denyPermission, alwaysAllowPermission } = useIDE();
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const runtimeRef = useRef<HTMLDivElement>(null);
 
@@ -345,6 +346,24 @@ export function TerminalPanel() {
                   </>
                 )}
               </div>
+
+              {/* Permission Prompt */}
+              {pendingPermission && (
+                <div className="px-2 pb-2">
+                  <PermissionPrompt
+                    toolCall={{
+                      id: pendingPermission.runId,
+                      tool: 'run_command',
+                      input: { command: pendingPermission.command },
+                      status: 'pending',
+                      timestamp: new Date(),
+                    }}
+                    onApprove={approvePermission}
+                    onDeny={denyPermission}
+                    onAlwaysAllow={alwaysAllowPermission}
+                  />
+                </div>
+              )}
 
               {/* Command input */}
               <div className="flex items-center gap-2 px-3 py-1.5 border-t border-border bg-muted/20">

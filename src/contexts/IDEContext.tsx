@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip, Conversation } from '@/types/ide';
 import { ToolCall, ToolName, PatchPreview, ParsedPatch, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
+import { supabase } from '@/integrations/supabase/client';
 import { RunnerSession, RuntimeType } from '@/types/runner';
 import { AgentRun, AgentStep, Hook, DEFAULT_HOOKS, MCPServer, BUILTIN_MCP_SERVERS } from '@/types/agent';
 import { STARTED_SYSTEM_PROMPT } from '@/lib/started-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage, extractFileBlocksFromMessage } from '@/lib/patch-utils';
-import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
+import { streamChat, runCommandRemote, streamAgent, PermissionRequest } from '@/lib/api-client';
 import { detectRuntime } from '@/lib/detect-runtime';
 import { RUNTIME_TEMPLATES } from '@/types/runner';
 import { toast } from '@/hooks/use-toast';
@@ -139,6 +140,10 @@ interface IDEContextType {
   isFileLockedByMe: (filePath: string) => boolean;
   trackActiveFile: (filePath: string | null) => void;
   isProjectOwner: boolean;
+  pendingPermission: (PermissionRequest & { runId: string }) | null;
+  approvePermission: () => void;
+  denyPermission: () => void;
+  alwaysAllowPermission: () => void;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -174,6 +179,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [pendingPatches, setPendingPatches] = useState<PatchPreview[]>([]);
   const [permissionPolicy, setPermissionPolicy] = useState<PermissionPolicy>(DEFAULT_PERMISSION_POLICY);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [pendingPermission, setPendingPermission] = useState<(PermissionRequest & { runId: string }) | null>(null);
 
   // Agent state
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
@@ -750,6 +756,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       command,
       cwd: runnerSession?.cwd || '/workspace',
       timeoutS: 600,
+      projectId: project.id,
       onLog: (line) => {
         setRuns(prev => prev.map(r =>
           r.id === run.id ? { ...r, logs: r.logs + line } : r
@@ -775,8 +782,60 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
             : r
         ));
       },
+      onRequiresApproval: (req) => {
+        // Pause the run and show permission prompt
+        setRuns(prev => prev.map(r =>
+          r.id === run.id
+            ? { ...r, status: 'error' as const, logs: r.logs + `\n🛡 Permission required: ${req.reason}\n`, exitCode: -1 }
+            : r
+        ));
+        setPendingPermission({ ...req, runId: run.id });
+      },
     });
-  }, [runnerSession]);
+  }, [runnerSession, project.id]);
+
+  // ─── Permission Approval/Deny Handlers ───
+
+  const approvePermission = useCallback(() => {
+    if (!pendingPermission) return;
+    setPendingPermission(null);
+    // Re-run the command (server won't ask again for simple re-run; user can also add an allow rule)
+    runCommand(pendingPermission.command);
+  }, [pendingPermission, runCommand]);
+
+  const denyPermission = useCallback(() => {
+    if (!pendingPermission) return;
+    setRuns(prev => prev.map(r =>
+      r.id === pendingPermission.runId
+        ? { ...r, logs: r.logs + '⛔ Command denied by user.\n' }
+        : r
+    ));
+    setPendingPermission(null);
+  }, [pendingPermission]);
+
+  const alwaysAllowPermission = useCallback(async () => {
+    if (!pendingPermission) return;
+    // Persist an "allow" rule for this command prefix
+    const cmdPrefix = pendingPermission.command.split(' ').slice(0, 2).join(' ');
+    try {
+      await supabase.from('project_permissions').insert({
+        project_id: project.id,
+        rule_type: 'command_prefix',
+        subject: cmdPrefix,
+        effect: 'allow',
+        reason: 'Auto-allowed by user from permission prompt',
+        created_by: user?.id || null,
+      });
+    } catch { /* best effort */ }
+    // Also add to local policy
+    setPermissionPolicy(prev => ({
+      ...prev,
+      allowedCommands: [...prev.allowedCommands, cmdPrefix],
+    }));
+    setPendingPermission(null);
+    // Re-run the command
+    runCommand(pendingPermission.command);
+  }, [pendingPermission, project.id, user?.id, runCommand]);
 
   const sendErrorsToChat = useCallback(() => {
     const lastRun = runs[runs.length - 1];
@@ -1034,6 +1093,10 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       isFileLockedByMe: collab.isFileLockedByMe,
       trackActiveFile: collab.trackActiveFile,
       isProjectOwner,
+      pendingPermission,
+      approvePermission,
+      denyPermission,
+      alwaysAllowPermission,
     }}>
       {children}
     </IDEContext.Provider>

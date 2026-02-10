@@ -106,24 +106,32 @@ export async function applyPatchRemote(request: ApplyPatchRequest): Promise<Appl
   return data as ApplyPatchResult;
 }
 
+export interface PermissionRequest {
+  command: string;
+  reason: string;
+  cwd: string;
+}
+
 interface RunCommandOptions {
   command: string;
   cwd?: string;
   timeoutS?: number;
+  projectId?: string;
   onLog: (line: string) => void;
   onDone: (result: { exitCode: number; cwd: string; durationMs: number }) => void;
   onError: (error: string) => void;
+  onRequiresApproval?: (req: PermissionRequest) => void;
   signal?: AbortSignal;
 }
 
-export async function runCommandRemote({ command, cwd, timeoutS, onLog, onDone, onError, signal }: RunCommandOptions) {
+export async function runCommandRemote({ command, cwd, timeoutS, projectId, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/run-command`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
-    body: JSON.stringify({ command, cwd, timeout_s: timeoutS }),
+    body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId }),
     signal,
   });
 
@@ -135,12 +143,17 @@ export async function runCommandRemote({ command, cwd, timeoutS, onLog, onDone, 
 
   const contentType = resp.headers.get('content-type') || '';
 
-  // Non-streaming response (e.g. cd command)
+  // Non-streaming response (e.g. cd command, permission ask)
   if (contentType.includes('application/json')) {
     const data = await resp.json();
+    // Handle permission "ask" response
+    if (data.requiresApproval && onRequiresApproval) {
+      onRequiresApproval({ command: data.command, reason: data.reason, cwd: data.cwd || cwd || '/workspace' });
+      return;
+    }
     if (data.stderr) onLog(data.stderr);
     if (data.stdout) onLog(data.stdout);
-    onDone({ exitCode: data.exitCode, cwd: data.cwd, durationMs: data.durationMs });
+    onDone({ exitCode: data.exitCode ?? (data.ok ? 0 : 1), cwd: data.cwd || cwd || '/workspace', durationMs: data.durationMs ?? 0 });
     return;
   }
 
