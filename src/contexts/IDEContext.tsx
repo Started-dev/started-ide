@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip } from '@/types/ide';
+import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip, Conversation } from '@/types/ide';
 import { ToolCall, ToolName, PatchPreview, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
 import { RunnerSession } from '@/types/runner';
 import { AgentRun, AgentStep, Hook, DEFAULT_HOOKS, MCPServer, BUILTIN_MCP_SERVERS } from '@/types/agent';
@@ -106,6 +106,12 @@ interface IDEContextType {
   loadSnapshots: () => void;
   createSnapshot: (label?: string) => void;
   restoreSnapshot: (snapshotId: string) => void;
+  // Conversations
+  conversations: Conversation[];
+  activeConversationId: string;
+  switchConversation: (conversationId: string) => void;
+  newConversation: () => void;
+  deleteConversation: (conversationId: string) => void;
   // Projects
   projects: ProjectInfo[];
   switchProject: (projectId: string) => void;
@@ -147,13 +153,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     { fileId: 'f-main', name: 'main.ts', path: '/src/main.ts', isModified: false },
   ]);
   const [activeTabId, setActiveTabId] = useState<string | null>('f-main');
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome', role: 'assistant',
-      content: "Hello! I'm Started, your AI coding assistant. I can help you write, debug, and refactor code. Select some code or mention a file to get started.\n\nTry asking me to:\n- Explain a function\n- Add error handling\n- Write tests\n- Refactor code\n\n**Agent Mode**: Click the 🧠 Agent tab to run autonomous multi-step tasks.",
-      timestamp: new Date(),
-    },
-  ]);
+  const makeWelcomeMessage = (): ChatMessage => ({
+    id: 'welcome-' + Date.now(), role: 'assistant',
+    content: "Hello! I'm Started, your AI coding assistant. I can help you write, debug, and refactor code. Select some code or mention a file to get started.\n\nTry asking me to:\n- Explain a function\n- Add error handling\n- Write tests\n- Refactor code\n\n**Agent Mode**: Click the 🧠 Agent tab to run autonomous multi-step tasks.",
+    timestamp: new Date(),
+  });
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([makeWelcomeMessage()]);
   const [runs, setRuns] = useState<RunResult[]>([]);
   const [showOutput, setShowOutput] = useState(false);
   const [showChat, setShowChat] = useState(true);
@@ -166,6 +171,116 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   // Agent state
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
   const agentAbortRef = useRef(false);
+
+  // Conversation history state
+  const makeNewConversation = useCallback((pId: string): Conversation => ({
+    id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    title: 'New Chat',
+    messages: [makeWelcomeMessage()],
+    createdAt: new Date(),
+    projectId: pId,
+  }), []);
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string>('');
+
+  // Initialize first conversation when project loads
+  useEffect(() => {
+    if (!projectId) return;
+    setConversations(prev => {
+      const projectConvs = prev.filter(c => c.projectId === projectId);
+      if (projectConvs.length > 0) {
+        // Switch to the latest conversation for this project
+        const latest = projectConvs[projectConvs.length - 1];
+        setActiveConversationId(latest.id);
+        setChatMessages(latest.messages);
+        return prev;
+      }
+      // Create a fresh conversation for this project
+      const newConv = makeNewConversation(projectId);
+      setActiveConversationId(newConv.id);
+      setChatMessages(newConv.messages);
+      return [...prev, newConv];
+    });
+    setAgentRun(null);
+    setActiveRightPanel('chat');
+  }, [projectId, makeNewConversation]);
+
+  // Sync chatMessages back to the active conversation
+  const prevMessagesRef = useRef(chatMessages);
+  useEffect(() => {
+    if (!activeConversationId || chatMessages === prevMessagesRef.current) {
+      prevMessagesRef.current = chatMessages;
+      return;
+    }
+    prevMessagesRef.current = chatMessages;
+    setConversations(prev => prev.map(c =>
+      c.id === activeConversationId
+        ? { ...c, messages: chatMessages, title: deriveTitle(chatMessages) }
+        : c
+    ));
+  }, [chatMessages, activeConversationId]);
+
+  const deriveTitle = (msgs: ChatMessage[]): string => {
+    const firstUser = msgs.find(m => m.role === 'user');
+    if (!firstUser) return 'New Chat';
+    return firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '…' : '');
+  };
+
+  const switchConversation = useCallback((conversationId: string) => {
+    // Save current messages
+    setConversations(prev => prev.map(c =>
+      c.id === activeConversationId
+        ? { ...c, messages: chatMessages, title: deriveTitle(chatMessages) }
+        : c
+    ));
+    const target = conversations.find(c => c.id === conversationId);
+    if (target) {
+      setChatMessages(target.messages);
+      setActiveConversationId(conversationId);
+      setAgentRun(null);
+      setActiveRightPanel('chat');
+    }
+  }, [activeConversationId, chatMessages, conversations]);
+
+  const newConversation = useCallback(() => {
+    if (!projectId) return;
+    // Save current
+    setConversations(prev => {
+      const updated = prev.map(c =>
+        c.id === activeConversationId
+          ? { ...c, messages: chatMessages, title: deriveTitle(chatMessages) }
+          : c
+      );
+      const newConv = makeNewConversation(projectId);
+      setActiveConversationId(newConv.id);
+      setChatMessages(newConv.messages);
+      setAgentRun(null);
+      setActiveRightPanel('chat');
+      return [...updated, newConv];
+    });
+  }, [projectId, activeConversationId, chatMessages, makeNewConversation]);
+
+  const deleteConversation = useCallback((conversationId: string) => {
+    if (!projectId) return;
+    setConversations(prev => {
+      const remaining = prev.filter(c => c.id !== conversationId);
+      const projectConvs = remaining.filter(c => c.projectId === projectId);
+      if (conversationId === activeConversationId) {
+        if (projectConvs.length > 0) {
+          const latest = projectConvs[projectConvs.length - 1];
+          setActiveConversationId(latest.id);
+          setChatMessages(latest.messages);
+        } else {
+          const newConv = makeNewConversation(projectId);
+          setActiveConversationId(newConv.id);
+          setChatMessages(newConv.messages);
+          return [...remaining, newConv];
+        }
+      }
+      return remaining;
+    });
+  }, [projectId, activeConversationId, makeNewConversation]);
 
   // Hooks state
   const [hooks, setHooks] = useState<Hook[]>(DEFAULT_HOOKS);
@@ -843,6 +958,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       mcpServers, toggleMCPServer,
       activeRightPanel, setActiveRightPanel,
       snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
+      conversations: conversations.filter(c => c.projectId === projectId),
+      activeConversationId, switchConversation, newConversation, deleteConversation,
       projects, switchProject, createProject, renameProject: renameProjectAction, deleteProject: deleteProjectAction,
       collaborators: collab.collaborators,
       collabMessages: collab.messages,
