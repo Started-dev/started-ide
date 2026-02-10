@@ -113,3 +113,15 @@ verify_jwt = false
 
 [functions.mcp-sendgrid]
 verify_jwt = false
+
+[functions.mcp-evm-rpc]
+verify_jwt = false
+
+[functions.mcp-contract-intel]
+verify_jwt = false
+
+[functions.mcp-solana]
+verify_jwt = false
+
+[functions.mcp-tx-simulator]
+verify_jwt = false

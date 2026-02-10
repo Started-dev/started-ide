@@ -245,6 +245,41 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://app.sendgrid.com/settings/api_keys',
     generateLabel: 'Create an API key on SendGrid',
   },
+  'mcp-evm-rpc': {
+    storageKey: 'evm_rpc_url',
+    label: 'EVM RPC URL',
+    placeholder: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY',
+    generateUrl: 'https://www.alchemy.com/',
+    generateLabel: 'Get a free RPC URL from Alchemy or Infura',
+  },
+  'mcp-contract-intel': {
+    storageKey: 'etherscan_api_key',
+    label: 'Etherscan API Key',
+    placeholder: 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    generateUrl: 'https://etherscan.io/myapikey',
+    generateLabel: 'Get a free API key from Etherscan',
+    secondaryKey: 'etherscan_chain',
+    secondaryLabel: 'Chain (ethereum, polygon, bsc, arbitrum, base)',
+    secondaryPlaceholder: 'ethereum',
+  },
+  'mcp-solana': {
+    storageKey: 'solana_rpc_url',
+    label: 'Solana RPC URL (optional, defaults to mainnet)',
+    placeholder: 'https://api.mainnet-beta.solana.com',
+    generateUrl: 'https://www.helius.dev/',
+    generateLabel: 'Get a free RPC URL from Helius or QuickNode',
+  },
+  'mcp-tx-simulator': {
+    storageKey: 'evm_rpc_url_sim',
+    label: 'EVM RPC URL',
+    placeholder: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY',
+    generateUrl: 'https://www.alchemy.com/',
+    generateLabel: 'Get RPC from Alchemy. Optional: add Tenderly for full simulation.',
+    secondaryKey: 'tenderly_access_key',
+    secondaryLabel: 'Tenderly Access Key (optional)',
+    secondaryPlaceholder: 'xxxxxxxxxxxxxxxxxxxxx',
+    regionKey: 'tenderly_account',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -342,6 +377,12 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         trelloApiKey: serverId === 'mcp-trello' ? token : undefined,
         trelloToken: serverId === 'mcp-trello' ? secondaryVal : undefined,
         sendgridApiKey: serverId === 'mcp-sendgrid' ? token : undefined,
+        evmRpcUrl: (serverId === 'mcp-evm-rpc' || serverId === 'mcp-tx-simulator') ? token : undefined,
+        etherscanKey: serverId === 'mcp-contract-intel' ? token : undefined,
+        etherscanChain: serverId === 'mcp-contract-intel' ? (secondaryVal || 'ethereum') : undefined,
+        solanaRpcUrl: serverId === 'mcp-solana' ? (token || undefined) : undefined,
+        tenderlyKey: serverId === 'mcp-tx-simulator' ? secondaryVal : undefined,
+        tenderlyAccount: serverId === 'mcp-tx-simulator' ? (sessionStorage.getItem('tenderly_account') || tokenInputs[`${serverId}_region`]) : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

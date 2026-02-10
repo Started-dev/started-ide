@@ -42,6 +42,14 @@ export interface MCPToolCallRequest {
   trelloApiKey?: string;
   trelloToken?: string;
   sendgridApiKey?: string;
+  // Web3 MCP
+  evmRpcUrl?: string;
+  etherscanKey?: string;
+  etherscanChain?: string;
+  solanaRpcUrl?: string;
+  tenderlyKey?: string;
+  tenderlyAccount?: string;
+  tenderlyProject?: string;
   serverId: string;
 }
 
@@ -108,6 +116,19 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       body.trello_token = req.trelloToken;
       break;
     case 'mcp-sendgrid': body.sendgrid_api_key = req.sendgridApiKey; break;
+    // Web3 MCP servers
+    case 'mcp-evm-rpc': body.rpc_url = req.evmRpcUrl; break;
+    case 'mcp-contract-intel':
+      body.etherscan_key = req.etherscanKey;
+      body.chain = req.etherscanChain || 'ethereum';
+      break;
+    case 'mcp-solana': body.rpc_url = req.solanaRpcUrl; break;
+    case 'mcp-tx-simulator':
+      body.rpc_url = req.evmRpcUrl;
+      body.tenderly_key = req.tenderlyKey;
+      body.tenderly_account = req.tenderlyAccount;
+      body.tenderly_project = req.tenderlyProject;
+      break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 

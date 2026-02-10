@@ -1,6 +1,48 @@
 import { ToolName, ToolCall, ToolResult, PermissionPolicy, DEFAULT_PERMISSION_POLICY, PermissionDecision } from '@/types/tools';
 import { IDEFile } from '@/types/ide';
 
+// ─── Web3 MCP Permission Policies ───
+
+export type Web3OpType = 'READ' | 'SIMULATE' | 'WRITE';
+
+const WEB3_TOOL_CLASSIFICATION: Record<string, Web3OpType> = {
+  // EVM RPC — all read-only
+  evm_block_number: 'READ', evm_get_balance: 'READ', evm_call: 'READ',
+  evm_get_logs: 'READ', evm_get_code: 'READ', evm_estimate_gas: 'READ',
+  evm_get_transaction: 'READ', evm_get_transaction_receipt: 'READ',
+  evm_get_block: 'READ', evm_chain_id: 'READ', evm_gas_price: 'READ',
+  // Contract Intel — all read-only
+  contract_get_abi: 'READ', contract_get_source: 'READ',
+  contract_verified_status: 'READ', contract_decode_calldata: 'READ',
+  contract_get_creation_tx: 'READ', contract_get_events: 'READ',
+  contract_get_transactions: 'READ',
+  // Solana — all read-only
+  solana_get_balance: 'READ', solana_get_account_info: 'READ',
+  solana_get_transaction: 'READ', solana_get_signatures: 'READ',
+  solana_get_token_accounts: 'READ', solana_get_program_accounts: 'READ',
+  solana_get_slot: 'READ', solana_get_block_height: 'READ',
+  solana_get_recent_blockhash: 'READ', solana_get_supply: 'READ',
+  solana_get_epoch_info: 'READ', solana_get_nft_metadata: 'READ',
+  // Transaction Simulator — simulation tier
+  sim_eth_call: 'SIMULATE', sim_estimate_gas: 'SIMULATE',
+  sim_trace_call: 'SIMULATE', sim_tenderly_simulate: 'SIMULATE',
+  sim_compare_gas: 'SIMULATE', sim_decode_revert: 'SIMULATE',
+};
+
+export function getWeb3OpType(toolName: string): Web3OpType | null {
+  return WEB3_TOOL_CLASSIFICATION[toolName] || null;
+}
+
+export function evaluateWeb3Permission(toolName: string): PermissionDecision {
+  const opType = getWeb3OpType(toolName);
+  if (!opType) return 'ask';
+  switch (opType) {
+    case 'READ': return 'allow';
+    case 'SIMULATE': return 'allow';
+    case 'WRITE': return 'ask';
+  }
+}
+
 /**
  * Determines whether a tool call requires user permission.
  */
