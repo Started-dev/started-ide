@@ -9,6 +9,7 @@ interface AgentTimelineProps {
   agentRun: AgentRun | null;
   onStop: () => void;
   onPause: () => void;
+  onOpenFile?: (path: string) => void;
 }
 
 const stepIcon: Record<AgentStepType, React.ReactNode> = {
@@ -29,7 +30,7 @@ const statusColors: Record<AgentStep['status'], string> = {
   skipped: 'text-muted-foreground/50',
 };
 
-export function AgentTimeline({ agentRun, onStop, onPause }: AgentTimelineProps) {
+export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTimelineProps) {
   if (!agentRun) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-6">
@@ -149,14 +150,15 @@ export function AgentTimeline({ agentRun, onStop, onPause }: AgentTimelineProps)
                   {step.filesChanged && step.filesChanged.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {step.filesChanged.map((fc) => (
-                        <span
+                        <button
                           key={fc.path}
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono ${
+                          onClick={() => onOpenFile?.(fc.path)}
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono cursor-pointer hover:opacity-80 transition-opacity ${
                             fc.action === 'created'
                               ? 'bg-ide-success/10 text-ide-success'
                               : 'bg-ide-info/10 text-ide-info'
                           }`}
-                          title={`${fc.action}: ${fc.path}`}
+                          title={`Click to open · ${fc.action}: ${fc.path}`}
                         >
                           {fc.action === 'created' ? (
                             <FilePlus2 className="h-2.5 w-2.5" />
@@ -164,7 +166,7 @@ export function AgentTimeline({ agentRun, onStop, onPause }: AgentTimelineProps)
                             <FileEdit className="h-2.5 w-2.5" />
                           )}
                           {fc.path.split('/').pop()}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
