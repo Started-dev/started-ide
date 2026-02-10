@@ -87,7 +87,7 @@ export function IDELayout() {
       <div className="flex items-center justify-between px-4 h-10 bg-ide-panel-header border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <img src={startedLogo} alt="Started" className="h-6 w-6 rounded-full" />
+            <img src={startedLogo} alt="Started" className="h-8 w-8 rounded-full" />
             <span className="text-sm font-semibold text-foreground">Started</span>
           </div>
           <button
