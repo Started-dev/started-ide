@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.mcp-aws]
 verify_jwt = false
+
+[functions.mcp-stripe]
+verify_jwt = false

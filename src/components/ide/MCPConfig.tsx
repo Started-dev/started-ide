@@ -51,6 +51,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     secondaryPlaceholder: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
     regionKey: 'aws_region',
   },
+  'mcp-stripe': {
+    storageKey: 'stripe_secret_key',
+    label: 'Stripe Secret Key',
+    placeholder: 'sk_live_xxxxxxxxxxxx or sk_test_xxxxxxxxxxxx',
+    generateUrl: 'https://dashboard.stripe.com/apikeys',
+    generateLabel: 'Get API keys from Stripe Dashboard',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -114,6 +121,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         awsAccessKeyId: serverId === 'mcp-aws' ? token : undefined,
         awsSecretAccessKey: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_secret_access_key') || tokenInputs[`${serverId}_secondary`]) : undefined,
         awsRegion: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_region') || 'us-east-1') : undefined,
+        stripeToken: serverId === 'mcp-stripe' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
