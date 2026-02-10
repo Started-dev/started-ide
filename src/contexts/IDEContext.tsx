@@ -13,6 +13,8 @@ import { useProjectPersistence } from '@/hooks/use-project-persistence';
 import type { ProjectInfo } from '@/hooks/use-project-persistence';
 import { useFileSnapshots } from '@/hooks/use-file-snapshots';
 import type { Snapshot } from '@/hooks/use-file-snapshots';
+import { useCollaboration } from '@/hooks/use-collaboration';
+import type { Collaborator, CollabMessage, FileLock, PresenceUser } from '@/hooks/use-collaboration';
 
 const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
 
@@ -110,6 +112,21 @@ interface IDEContextType {
   createProject: (name: string) => void;
   renameProject: (projectId: string, name: string) => void;
   deleteProject: (projectId: string) => void;
+  // Collaboration
+  collaborators: Collaborator[];
+  collabMessages: CollabMessage[];
+  fileLocks: FileLock[];
+  presenceUsers: PresenceUser[];
+  collabLoading: boolean;
+  inviteCollaborator: (email: string, role: 'viewer' | 'editor') => void;
+  removeCollaborator: (id: string) => void;
+  sendCollabMessage: (content: string) => void;
+  lockFile: (filePath: string) => Promise<boolean>;
+  unlockFile: (filePath: string) => void;
+  isFileLocked: (filePath: string) => FileLock | null;
+  isFileLockedByMe: (filePath: string) => boolean;
+  trackActiveFile: (filePath: string | null) => void;
+  isProjectOwner: boolean;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -118,6 +135,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { projectId, loading: persistenceLoading, initialFiles, projects, saveFile, deleteFileFromDB, saveAllFiles, switchProject: switchProjectRaw, createProject: createProjectRaw, renameProject: renameProjectRaw, deleteProject: deleteProjectRaw } = useProjectPersistence(user);
   const { snapshots, loading: snapshotsLoading, loadSnapshots, createSnapshot: createSnapshotRaw, getSnapshotFiles } = useFileSnapshots(projectId);
+  const collab = useCollaboration(projectId, user?.id || null, user?.email || null);
+  const isProjectOwner = !!user && projects.some(p => p.id === projectId);
 
   const [project, setProject] = useState<Project>({ id: 'demo-1', name: 'demo-project', runtimeType: 'node', files: [] });
   const runnerClientRef = useRef<IRunnerClient>(getRunnerClient());
@@ -717,6 +736,20 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       activeRightPanel, setActiveRightPanel,
       snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
       projects, switchProject, createProject, renameProject: renameProjectAction, deleteProject: deleteProjectAction,
+      collaborators: collab.collaborators,
+      collabMessages: collab.messages,
+      fileLocks: collab.fileLocks,
+      presenceUsers: collab.presenceUsers,
+      collabLoading: collab.loading,
+      inviteCollaborator: collab.inviteCollaborator,
+      removeCollaborator: collab.removeCollaborator,
+      sendCollabMessage: collab.sendCollabMessage,
+      lockFile: collab.lockFile,
+      unlockFile: collab.unlockFile,
+      isFileLocked: collab.isFileLocked,
+      isFileLockedByMe: collab.isFileLockedByMe,
+      trackActiveFile: collab.trackActiveFile,
+      isProjectOwner,
     }}>
       {children}
     </IDEContext.Provider>

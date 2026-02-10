@@ -14,6 +14,76 @@ export type Database = {
   }
   public: {
     Tables: {
+      collab_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          user_email: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          project_id: string
+          user_email: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          user_email?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collab_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      file_locks: {
+        Row: {
+          file_path: string
+          id: string
+          locked_at: string
+          locked_by: string
+          locked_by_email: string
+          project_id: string
+        }
+        Insert: {
+          file_path: string
+          id?: string
+          locked_at?: string
+          locked_by: string
+          locked_by_email: string
+          project_id: string
+        }
+        Update: {
+          file_path?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string
+          locked_by_email?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_locks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       file_snapshots: {
         Row: {
           created_at: string
@@ -39,6 +109,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "file_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_collaborators: {
+        Row: {
+          accepted: boolean
+          created_at: string
+          email: string
+          id: string
+          invited_by: string
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          accepted?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          invited_by: string
+          project_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          accepted?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string
+          project_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_collaborators_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -148,7 +259,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_project_member: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

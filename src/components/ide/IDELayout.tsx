@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
@@ -11,6 +11,8 @@ import { MCPConfig } from './MCPConfig';
 import { HooksConfig } from './HooksConfig';
 import { SnapshotBrowser } from './SnapshotBrowser';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { CollaborationPanel } from './CollaborationPanel';
+import { PresenceAvatars } from './PresenceAvatars';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -24,6 +26,8 @@ export function IDELayout() {
     hooks, toggleHook, addHook, removeHook,
     snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
     projects, switchProject, createProject, renameProject, deleteProject,
+    collaborators, collabMessages, fileLocks, presenceUsers,
+    isProjectOwner, inviteCollaborator, removeCollaborator, sendCollabMessage,
   } = useIDE();
   const { signOut, user } = useAuth();
 
@@ -31,6 +35,7 @@ export function IDELayout() {
   const [showHooks, setShowHooks] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
+  const [showCollab, setShowCollab] = useState(false);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -122,6 +127,15 @@ export function IDELayout() {
           >
             <Plug className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">MCP</span>
+          </button>
+          <PresenceAvatars users={presenceUsers} onClick={() => setShowCollab(true)} />
+          <button
+            onClick={() => setShowCollab(true)}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="Collaboration"
+          >
+            <Users className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Collab</span>
           </button>
           <div className="w-px h-4 bg-border mx-1" />
           <button
@@ -269,6 +283,21 @@ export function IDELayout() {
           onRename={renameProject}
           onDelete={deleteProject}
           onClose={() => setShowProjectSwitcher(false)}
+        />
+      )}
+      {showCollab && (
+        <CollaborationPanel
+          collaborators={collaborators}
+          messages={collabMessages}
+          fileLocks={fileLocks}
+          presenceUsers={presenceUsers}
+          currentUserId={user?.id || ''}
+          currentUserEmail={user?.email || ''}
+          isOwner={isProjectOwner}
+          onInvite={inviteCollaborator}
+          onRemoveCollaborator={removeCollaborator}
+          onSendMessage={sendCollabMessage}
+          onClose={() => setShowCollab(false)}
         />
       )}
     </div>
