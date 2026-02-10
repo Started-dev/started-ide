@@ -1,99 +1,39 @@
 
 
-# Enhanced User Profile & Settings
+# Fix Preferences + Add Agent Presets
 
-Currently the Account tab only shows the user's email, join date, User ID, and a sign-out button. Here's the plan to make it a full-featured settings experience.
+## Problems Found
 
-## What We'll Add
+1. **Font size setting is decorative** -- The Preferences slider saves to `localStorage('editor_font_size')` but `EditorPane.tsx` hardcodes `fontSize: 13` and never reads it.
+2. **Default agent preset setting is decorative** -- The dropdown saves to `localStorage('default_agent_preset')` but `IDEContext.tsx` never reads it when launching agent runs.
+3. **Only 1 agent preset exists** -- "Smart Contract Builder" is the only row in the `agent_presets` table. Users need general-purpose presets.
 
-### 1. Profiles Table (Database)
-Create a `profiles` table to store editable user data:
-- `id` (UUID, PK, references auth.users)
-- `display_name` (text)
-- `avatar_url` (text)
-- `bio` (text, max 280 chars)
-- `created_at`, `updated_at`
+## Changes
 
-A database trigger will auto-create a profile row when a new user signs up. RLS policies will ensure users can only read/update their own profile.
+### 1. Wire Font Size to Editor (EditorPane.tsx)
+- Read `editor_font_size` from `localStorage` (default 14)
+- Listen for `storage` events so the editor updates live when user changes the setting in another tab/component
+- Pass the value to Monaco's `fontSize` option instead of hardcoded `13`
 
-### 2. Profile Settings Section (Account Tab)
-Replace the current read-only account card with an editable form:
-- **Avatar**: Clickable circle that opens a file picker; uploads to Lovable Cloud storage and saves the URL
-- **Display Name**: Text input (used in collaboration features / presence avatars)
-- **Bio**: Short textarea
-- **Save** button with loading state and success toast
+### 2. Wire Default Preset to Agent Runs (IDEContext.tsx)
+- When starting an agent run, read `default_agent_preset` from `localStorage`
+- Pass it as `preset_key` in the `streamAgent` call so it gets recorded and used
 
-### 3. Security Section Improvements
-Add practical security actions below the existing User ID display:
-- **Change Password**: Email + new password form that calls the auth password update API
-- **Active Sessions**: Show current session info (last sign-in time)
+### 3. Seed 5 New Agent Presets (Database Migration)
+Insert these presets into `agent_presets`:
 
-### 4. New "Preferences" Tab
-Add a third sidebar tab for IDE preferences:
-- **Theme**: Light / Dark / System toggle (wired to the existing `next-themes` dependency)
-- **Editor Font Size**: Slider (14-22px), saved to `localStorage`
-- **Default Agent Preset**: Dropdown populated from the `agent_presets` table
+| Key | Name | Description |
+|-----|------|-------------|
+| `general_assistant` | General Assistant | All-purpose coding helper for any language or framework |
+| `frontend_builder` | Frontend Builder | Specializes in React, CSS, and UI component development |
+| `api_engineer` | API Engineer | Builds REST/GraphQL endpoints, middleware, and integrations |
+| `debugger` | Debugger | Analyzes errors, traces bugs, and suggests targeted fixes |
+| `code_reviewer` | Code Reviewer | Reviews code for quality, security, and best practices |
 
-### 5. Sidebar Navigation Update
-Add the new "Preferences" tab to the settings sidebar alongside Billing and Account.
-
----
-
-## Technical Details
-
-### Database Migration
-```sql
--- profiles table
-CREATE TABLE public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  display_name TEXT DEFAULT '',
-  avatar_url TEXT DEFAULT '',
-  bio TEXT DEFAULT '',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can read own profile"
-  ON public.profiles FOR SELECT
-  USING (id = auth.uid());
-
-CREATE POLICY "Users can update own profile"
-  ON public.profiles FOR UPDATE
-  USING (id = auth.uid());
-
-CREATE POLICY "Users can insert own profile"
-  ON public.profiles FOR INSERT
-  WITH CHECK (id = auth.uid());
-
--- Auto-create profile on signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  INSERT INTO public.profiles (id)
-  VALUES (NEW.id);
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-```
-
-### Storage Bucket
-Create an `avatars` storage bucket (public read, authenticated upload) for profile pictures.
+Each preset will have a tailored system prompt, appropriate default tools, and sensible permission defaults.
 
 ### Files Changed
-- **New migration**: `supabase/migrations/..._create_profiles.sql`
-- **`src/pages/UserSettings.tsx`**: Expand Account tab with profile form, add Preferences tab, add password change section
-- **`src/contexts/AuthContext.tsx`**: Add `profile` state and a `refreshProfile` helper so the display name / avatar is available app-wide
-- **`src/components/ide/PresenceAvatars.tsx`**: Use `profile.display_name` and `profile.avatar_url` instead of raw email
+- **`src/components/ide/EditorPane.tsx`** -- Read font size from localStorage, add state + storage listener
+- **`src/contexts/IDEContext.tsx`** -- Read default preset from localStorage when starting agent runs
+- **Database migration** -- Insert 5 new agent presets
 
-### No Breaking Changes
-The existing Billing tab and sign-out flow remain untouched. The new profile row is auto-created for existing users on their next settings page visit (upsert fallback).
