@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.mcp-zapier]
 verify_jwt = false
+
+[functions.mcp-airtable]
+verify_jwt = false

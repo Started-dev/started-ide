@@ -172,6 +172,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://zapier.com/app/zaps',
     generateLabel: 'Create a Zap with Webhook trigger',
   },
+  'mcp-airtable': {
+    storageKey: 'airtable_token',
+    label: 'Airtable Personal Access Token',
+    placeholder: 'patXXXXXXXXXXXXXX.XXXXXXXXXXXXXXXX',
+    generateUrl: 'https://airtable.com/create/tokens',
+    generateLabel: 'Create a token on Airtable',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -256,6 +263,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         twilioAccountSid: serverId === 'mcp-twilio' ? token : undefined,
         twilioAuthToken: serverId === 'mcp-twilio' ? secondaryVal : undefined,
         zapierWebhookUrl: serverId === 'mcp-zapier' ? token : undefined,
+        airtableToken: serverId === 'mcp-airtable' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
