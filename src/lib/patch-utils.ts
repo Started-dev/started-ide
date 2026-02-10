@@ -1,5 +1,13 @@
 import { ParsedPatch, DiffHunk, DiffLine } from '@/types/tools';
 
+// ─── Types ───
+
+export interface FileBlock {
+  path: string;
+  content: string;
+  language: string;
+}
+
 /**
  * Parse a unified diff string into structured patches.
  */
@@ -9,7 +17,6 @@ export function parseUnifiedDiff(raw: string): ParsedPatch[] {
   let i = 0;
 
   while (i < lines.length) {
-    // Look for --- line
     if (lines[i]?.startsWith('---')) {
       const oldFile = lines[i].replace(/^---\s+(a\/)?/, '').trim();
       i++;
@@ -22,7 +29,6 @@ export function parseUnifiedDiff(raw: string): ParsedPatch[] {
 
       const hunks: DiffHunk[] = [];
 
-      // Parse hunks
       while (i < lines.length && !lines[i]?.startsWith('---')) {
         if (lines[i]?.startsWith('@@')) {
           const hunkMatch = lines[i].match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
@@ -36,7 +42,6 @@ export function parseUnifiedDiff(raw: string): ParsedPatch[] {
             };
             i++;
 
-            // Collect hunk lines
             while (i < lines.length && !lines[i]?.startsWith('@@') && !lines[i]?.startsWith('---')) {
               const line = lines[i];
               if (line.startsWith('+')) {
@@ -77,12 +82,10 @@ export function parseUnifiedDiff(raw: string): ParsedPatch[] {
  */
 export function applyPatchToContent(content: string, patch: ParsedPatch): string | null {
   const lines = content.split('\n');
-
-  // Apply hunks in reverse order to preserve line numbers
   const sortedHunks = [...patch.hunks].sort((a, b) => b.oldStart - a.oldStart);
 
   for (const hunk of sortedHunks) {
-    const startIdx = hunk.oldStart - 1; // Convert to 0-indexed
+    const startIdx = hunk.oldStart - 1;
     const newLines: string[] = [];
 
     for (const line of hunk.lines) {
@@ -91,7 +94,6 @@ export function applyPatchToContent(content: string, patch: ParsedPatch): string
       }
     }
 
-    // Replace the old lines with new lines
     lines.splice(startIdx, hunk.oldCount, ...newLines);
   }
 
@@ -100,24 +102,67 @@ export function applyPatchToContent(content: string, patch: ParsedPatch): string
 
 /**
  * Extract diff blocks from an AI response message.
+ * Matches ```diff blocks AND code blocks with file-path headers.
  */
 export function extractDiffFromMessage(message: string): string | null {
+  // Try standard ```diff block first
   const diffMatch = message.match(/```diff\n([\s\S]*?)```/);
-  return diffMatch ? diffMatch[1].trim() : null;
+  if (diffMatch) return diffMatch[1].trim();
+
+  // Try code blocks that contain unified diff markers (--- / +++ / @@)
+  const codeBlocks = message.match(/```(?:\w+)?\n([\s\S]*?)```/g);
+  if (codeBlocks) {
+    for (const block of codeBlocks) {
+      const inner = block.replace(/```(?:\w+)?\n/, '').replace(/```$/, '').trim();
+      if (inner.includes('--- ') && inner.includes('+++ ') && inner.includes('@@ ')) {
+        return inner;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract file blocks from AI response — matches ```lang filepath\ncontent```
+ * This handles AI responses that output full file contents with a path header.
+ */
+export function extractFileBlocksFromMessage(message: string): FileBlock[] {
+  const blocks: FileBlock[] = [];
+  // Match: ```language path/to/file.ext\ncontent\n```
+  // The path must contain a / or a . to distinguish from just a language tag
+  const regex = /```(\w+)\s+([\w./-]+(?:\/[\w./-]+|\.[\w]+))\n([\s\S]*?)```/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(message)) !== null) {
+    const language = match[1];
+    const path = match[2];
+    const content = match[3].trimEnd();
+
+    // Skip if this looks like a diff block
+    if (content.includes('--- ') && content.includes('+++ ') && content.includes('@@ ')) {
+      continue;
+    }
+
+    // Must have a file extension to be considered a file path
+    if (!path.includes('.')) continue;
+
+    blocks.push({ path, content, language });
+  }
+
+  return blocks;
 }
 
 /**
  * Extract suggested commands from an AI response message.
  */
 export function extractCommandsFromMessage(message: string): string[] {
-  // Match fenced code blocks after "Commands:" or standalone blocks that look like commands
   const commandBlocks = message.match(/```(?:bash|sh|shell)?\n([\s\S]*?)```/g);
   if (!commandBlocks) return [];
 
   return commandBlocks
     .map(block => block.replace(/```(?:bash|sh|shell)?\n/, '').replace(/```$/, '').trim())
     .filter(cmd => {
-      // Filter out diff blocks
       return !cmd.startsWith('---') && !cmd.startsWith('+++') && !cmd.startsWith('@@');
     });
 }

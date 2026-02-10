@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip, Conversation } from '@/types/ide';
-import { ToolCall, ToolName, PatchPreview, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
+import { ToolCall, ToolName, PatchPreview, ParsedPatch, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
 import { RunnerSession, RuntimeType } from '@/types/runner';
 import { AgentRun, AgentStep, Hook, DEFAULT_HOOKS, MCPServer, BUILTIN_MCP_SERVERS } from '@/types/agent';
 import { STARTED_SYSTEM_PROMPT } from '@/lib/started-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
-import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
+import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage, extractFileBlocksFromMessage } from '@/lib/patch-utils';
 import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
 import { detectRuntime } from '@/lib/detect-runtime';
 import { RUNTIME_TEMPLATES } from '@/types/runner';
@@ -48,6 +48,16 @@ const DEMO_FILES: IDEFile[] = [
   { id: 'f-tsconfig', name: 'tsconfig.json', path: '/tsconfig.json', content: `{\n  "compilerOptions": {\n    "target": "ES2020",\n    "module": "commonjs",\n    "strict": true,\n    "outDir": "./dist"\n  },\n  "include": ["src/**/*"]\n}\n`, language: 'json', parentId: null, isFolder: false },
 ];
 
+const LANG_MAP: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
+  jsx: 'javascriptreact', json: 'json', md: 'markdown',
+  py: 'python', css: 'css', html: 'html',
+  go: 'go', rs: 'rust', c: 'c', cpp: 'cpp', cc: 'cpp', cxx: 'cpp',
+  php: 'php', rb: 'ruby', java: 'java', sol: 'solidity',
+  dart: 'dart', swift: 'swift', kt: 'kotlin', kts: 'kotlin',
+  r: 'r', sh: 'shell', bash: 'shell',
+};
+
 interface IDEContextType {
   project: Project;
   setRuntimeType: (rt: RuntimeType) => void;
@@ -72,7 +82,6 @@ interface IDEContextType {
   toggleOutput: () => void;
   toggleChat: () => void;
   getFileById: (id: string) => IDEFile | undefined;
-  // Tool system
   toolCalls: ToolCall[];
   pendingPatches: PatchPreview[];
   permissionPolicy: PermissionPolicy;
@@ -83,48 +92,39 @@ interface IDEContextType {
   applyPatch: (patchId: string) => void;
   applyPatchAndRun: (patchId: string, command: string) => void;
   cancelPatch: (patchId: string) => void;
-  // Runner
   runnerSession: RunnerSession | null;
   killRunningProcess: () => void;
   sendErrorsToChat: () => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
-  // Agent
   agentRun: AgentRun | null;
   startAgent: (goal: string) => void;
   stopAgent: () => void;
   pauseAgent: () => void;
   clearAgentRun: () => void;
-  // Hooks
   hooks: Hook[];
   toggleHook: (id: string) => void;
   addHook: (hook: Omit<Hook, 'id'>) => void;
   removeHook: (id: string) => void;
-  // MCP
   mcpServers: MCPServer[];
   toggleMCPServer: (id: string) => void;
-  // Panel
   activeRightPanel: 'chat' | 'agent';
   setActiveRightPanel: (panel: 'chat' | 'agent') => void;
-  // Snapshots
   snapshots: Snapshot[];
   snapshotsLoading: boolean;
   loadSnapshots: () => void;
   createSnapshot: (label?: string) => void;
   restoreSnapshot: (snapshotId: string) => void;
-  // Conversations
   conversations: Conversation[];
   activeConversationId: string;
   switchConversation: (conversationId: string) => void;
   newConversation: () => void;
   deleteConversation: (conversationId: string) => void;
-  // Projects
   projects: ProjectInfo[];
   switchProject: (projectId: string) => void;
   createProject: (name: string) => void;
   renameProject: (projectId: string, name: string) => void;
   deleteProject: (projectId: string) => void;
-  // Collaboration
   collaborators: Collaborator[];
   collabMessages: CollabMessage[];
   fileLocks: FileLock[];
@@ -179,9 +179,25 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
   const agentAbortRef = useRef(false);
 
-  // Conversation history state (DB-backed)
+  // ─── filesRef: always-current files for async callbacks ───
+  const filesRef = useRef(files);
+  useEffect(() => { filesRef.current = files; }, [files]);
+
+  // ─── Local conversations (optimistic, works without auth) ───
+  const [localConversations, setLocalConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string>('');
   const convInitializedRef = useRef<string | null>(null);
+
+  // Merged conversations: DB + local-only (deduped by id)
+  const dbConversations = convPersistence.conversations.filter(c => c.projectId === projectId);
+  const mergedConversations = React.useMemo(() => {
+    const byId = new Map<string, Conversation>();
+    for (const c of dbConversations) byId.set(c.id, c);
+    for (const c of localConversations) {
+      if (!byId.has(c.id)) byId.set(c.id, c);
+    }
+    return Array.from(byId.values()).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [dbConversations, localConversations]);
 
   const makeNewConversation = useCallback((pId: string): Conversation => ({
     id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -197,10 +213,9 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     return firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '…' : '');
   };
 
-  // Initialize conversations when project loads and DB conversations are ready
+  // Initialize conversations when project loads
   useEffect(() => {
     if (!projectId || convPersistence.loading) return;
-    // Only initialize once per project
     if (convInitializedRef.current === projectId) return;
 
     const projectConvs = convPersistence.conversations.filter(c => c.projectId === projectId);
@@ -209,12 +224,13 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       const latest = projectConvs[projectConvs.length - 1];
       setActiveConversationId(latest.id);
       setChatMessages(latest.messages);
+      setLocalConversations([]);
     } else {
-      // Create a fresh conversation
       convInitializedRef.current = projectId;
       const newConv = makeNewConversation(projectId);
       setActiveConversationId(newConv.id);
       setChatMessages(newConv.messages);
+      setLocalConversations([newConv]);
       convPersistence.createConversation(newConv);
     }
     setAgentRun(null);
@@ -232,21 +248,25 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     prevMessagesRef.current = chatMessages;
     const title = deriveTitle(chatMessages);
     convPersistence.saveConversation(activeConversationId, chatMessages, title);
+    // Also update local conversations with new title
+    setLocalConversations(prev => prev.map(c =>
+      c.id === activeConversationId ? { ...c, messages: chatMessages, title } : c
+    ));
   }, [chatMessages, activeConversationId, convPersistence.saveConversation]);
 
   const switchConversation = useCallback((conversationId: string) => {
-    // Save current before switching
     if (activeConversationId) {
       convPersistence.saveConversation(activeConversationId, chatMessages, deriveTitle(chatMessages));
     }
-    const target = convPersistence.conversations.find(c => c.id === conversationId);
+    // Look in merged list
+    const target = mergedConversations.find(c => c.id === conversationId);
     if (target) {
       setChatMessages(target.messages);
       setActiveConversationId(conversationId);
       setAgentRun(null);
       setActiveRightPanel('chat');
     }
-  }, [activeConversationId, chatMessages, convPersistence]);
+  }, [activeConversationId, chatMessages, convPersistence, mergedConversations]);
 
   const newConversation = useCallback(() => {
     if (!projectId) return;
@@ -255,39 +275,40 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       convPersistence.saveConversation(activeConversationId, chatMessages, deriveTitle(chatMessages));
     }
     const newConv = makeNewConversation(projectId);
+    // Add to local immediately (optimistic)
+    setLocalConversations(prev => [...prev, newConv]);
     setActiveConversationId(newConv.id);
     setChatMessages(newConv.messages);
     setAgentRun(null);
     setActiveRightPanel('chat');
+    // Persist to DB (fire and forget)
     convPersistence.createConversation(newConv);
   }, [projectId, activeConversationId, chatMessages, makeNewConversation, convPersistence]);
 
   const deleteConversation = useCallback((conversationId: string) => {
     if (!projectId) return;
     convPersistence.deleteConversationFromDB(conversationId);
+    setLocalConversations(prev => prev.filter(c => c.id !== conversationId));
     
     if (conversationId === activeConversationId) {
-      const remaining = convPersistence.conversations.filter(c => c.id !== conversationId && c.projectId === projectId);
+      const remaining = mergedConversations.filter(c => c.id !== conversationId);
       if (remaining.length > 0) {
         const latest = remaining[remaining.length - 1];
         setActiveConversationId(latest.id);
         setChatMessages(latest.messages);
       } else {
         const newConv = makeNewConversation(projectId);
+        setLocalConversations(prev => [...prev, newConv]);
         setActiveConversationId(newConv.id);
         setChatMessages(newConv.messages);
         convPersistence.createConversation(newConv);
       }
     }
-  }, [projectId, activeConversationId, convPersistence, makeNewConversation]);
+  }, [projectId, activeConversationId, convPersistence, makeNewConversation, mergedConversations]);
 
   // Hooks state
   const [hooks, setHooks] = useState<Hook[]>(DEFAULT_HOOKS);
-
-  // MCP state
   const [mcpServers, setMcpServers] = useState<MCPServer[]>(BUILTIN_MCP_SERVERS);
-
-  // Panel state
   const [activeRightPanel, setActiveRightPanel] = useState<'chat' | 'agent'>('chat');
 
   const toggleTheme = useCallback(() => {
@@ -308,7 +329,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (initialFiles && initialFiles.length > 0) {
-      // Loaded from DB
       setFiles(initialFiles);
       const firstFile = initialFiles.find(f => !f.isFolder);
       if (firstFile) {
@@ -319,7 +339,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setActiveTabId(null);
       }
     } else if (projectId && !initialFiles) {
-      // No files in DB — seed with demo files and update state immediately
       setFiles(DEMO_FILES);
       saveAllFiles(DEMO_FILES);
       const firstFile = DEMO_FILES.find(f => !f.isFolder);
@@ -386,18 +405,9 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     const basePath = parent ? parent.path : '';
     const path = `${basePath}/${name}`;
     const ext = name.split('.').pop() || '';
-    const langMap: Record<string, string> = {
-      ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
-      jsx: 'javascriptreact', json: 'json', md: 'markdown',
-      py: 'python', css: 'css', html: 'html',
-      go: 'go', rs: 'rust', c: 'c', cpp: 'cpp', cc: 'cpp', cxx: 'cpp',
-      php: 'php', rb: 'ruby', java: 'java', sol: 'solidity',
-      dart: 'dart', swift: 'swift', kt: 'kotlin', kts: 'kotlin',
-      r: 'r', sh: 'shell', bash: 'shell',
-    };
     const newFile: IDEFile = {
       id: `f-${Date.now()}`, name, path, content: isFolder ? '' : '',
-      language: langMap[ext] || 'plaintext', parentId, isFolder,
+      language: LANG_MAP[ext] || 'plaintext', parentId, isFolder,
     };
     setFiles(prev => [...prev, newFile]);
     if (!isFolder) {
@@ -411,7 +421,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (file && !file.isFolder) {
       deleteFileFromDB(file.path);
     }
-    // Also delete children files from DB
     files.filter(f => f.parentId === fileId && !f.isFolder).forEach(f => deleteFileFromDB(f.path));
     setFiles(prev => prev.filter(f => f.id !== fileId && f.parentId !== fileId));
     closeTab(fileId);
@@ -469,47 +478,142 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  // ─── Patch System ───
+  // ─── Consolidated Patch Application ───
+
+  /**
+   * Shared helper that applies parsed patches to the file system.
+   * Uses filesRef.current to avoid stale closures.
+   * Creates folders, new files, applies modifications, and persists to DB.
+   */
+  const autoApplyParsedPatches = useCallback((parsed: ParsedPatch[]): boolean => {
+    let allApplied = true;
+
+    for (const patch of parsed) {
+      const isNewFile = patch.oldFile === '/dev/null';
+      if (isNewFile) {
+        const newContent = patch.hunks
+          .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
+          .join('\n');
+        const filePath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
+        const fileName = filePath.split('/').pop() || filePath;
+        const ext = fileName.split('.').pop() || '';
+
+        // Ensure parent folders exist
+        const parts = filePath.split('/').filter(Boolean);
+        setFiles(prev => {
+          const next = [...prev];
+          for (let i = 1; i < parts.length; i++) {
+            const folderPath = '/' + parts.slice(0, i).join('/');
+            if (!next.find(f => f.path === folderPath && f.isFolder)) {
+              const parentPath = i > 1 ? '/' + parts.slice(0, i - 1).join('/') : null;
+              const parentId = parentPath ? next.find(f => f.path === parentPath)?.id || null : null;
+              next.push({
+                id: `folder-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 4)}`,
+                name: parts[i - 1],
+                path: folderPath,
+                content: '',
+                language: '',
+                parentId,
+                isFolder: true,
+              });
+            }
+          }
+          const parentPath = '/' + parts.slice(0, -1).join('/');
+          const parentFile = next.find(f => f.path === parentPath);
+          // Check if file already exists (overwrite)
+          const existingIdx = next.findIndex(f => f.path === filePath && !f.isFolder);
+          if (existingIdx >= 0) {
+            next[existingIdx] = { ...next[existingIdx], content: newContent };
+          } else {
+            const newFile: IDEFile = {
+              id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+              name: fileName,
+              path: filePath,
+              content: newContent,
+              language: LANG_MAP[ext] || 'plaintext',
+              parentId: parentFile?.id || null,
+              isFolder: false,
+            };
+            next.push(newFile);
+            // Open in tab
+            setOpenTabs(p => [...p, { fileId: newFile.id, name: newFile.name, path: newFile.path, isModified: false }]);
+            setActiveTabId(newFile.id);
+          }
+          return next;
+        });
+        saveFile(filePath, newContent);
+      } else {
+        // Modify existing file — use functional update to get latest state
+        const targetPath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
+        setFiles(prev => {
+          const file = prev.find(f => f.path === targetPath);
+          if (!file) { allApplied = false; return prev; }
+          const newContent = applyPatchToContent(file.content, patch);
+          if (newContent === null) { allApplied = false; return prev; }
+          saveFile(targetPath, newContent);
+          return prev.map(f => f.path === targetPath ? { ...f, content: newContent } : f);
+        });
+      }
+    }
+
+    return allApplied;
+  }, [saveFile]);
+
+  /**
+   * Auto-create files from code blocks with file-path headers.
+   */
+  const autoCreateFileBlocks = useCallback((message: string) => {
+    const blocks = extractFileBlocksFromMessage(message);
+    if (blocks.length === 0) return;
+
+    for (const block of blocks) {
+      const filePath = block.path.startsWith('/') ? block.path : `/${block.path}`;
+      const fileName = filePath.split('/').pop() || filePath;
+      const ext = fileName.split('.').pop() || '';
+      const parts = filePath.split('/').filter(Boolean);
+
+      setFiles(prev => {
+        // Don't create if file already exists
+        if (prev.find(f => f.path === filePath && !f.isFolder)) return prev;
+
+        const next = [...prev];
+        // Ensure folders
+        for (let i = 1; i < parts.length; i++) {
+          const folderPath = '/' + parts.slice(0, i).join('/');
+          if (!next.find(f => f.path === folderPath && f.isFolder)) {
+            const parentPath = i > 1 ? '/' + parts.slice(0, i - 1).join('/') : null;
+            const parentId = parentPath ? next.find(f => f.path === parentPath)?.id || null : null;
+            next.push({
+              id: `folder-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 4)}`,
+              name: parts[i - 1], path: folderPath, content: '', language: '',
+              parentId, isFolder: true,
+            });
+          }
+        }
+        const parentPath = '/' + parts.slice(0, -1).join('/');
+        const parentFile = next.find(f => f.path === parentPath);
+        const newFile: IDEFile = {
+          id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          name: fileName, path: filePath, content: block.content,
+          language: LANG_MAP[ext] || block.language || 'plaintext',
+          parentId: parentFile?.id || null, isFolder: false,
+        };
+        next.push(newFile);
+        setOpenTabs(p => [...p, { fileId: newFile.id, name: newFile.name, path: newFile.path, isModified: false }]);
+        setActiveTabId(newFile.id);
+        return next;
+      });
+      saveFile(filePath, block.content);
+    }
+  }, [saveFile]);
+
+  // ─── Patch System (manual apply) ───
 
   const applyPatchToFiles = useCallback((patchId: string) => {
     const patchPreview = pendingPatches.find(p => p.id === patchId);
     if (!patchPreview) return false;
     try {
-      let allApplied = true;
-      for (const patch of patchPreview.patches) {
-        const isNewFile = patch.oldFile === '/dev/null';
-        if (isNewFile) {
-          const newContent = patch.hunks
-            .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
-            .join('\n');
-          const name = patch.newFile.split('/').pop() || patch.newFile;
-          const path = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
-          const ext = name.split('.').pop() || '';
-          const langMap: Record<string, string> = {
-            ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
-            jsx: 'javascriptreact', json: 'json', md: 'markdown',
-            py: 'python', css: 'css', html: 'html',
-          };
-          const parentPath = path.split('/').slice(0, -1).join('/') || '/';
-          const parent = files.find(f => f.path === parentPath && f.isFolder);
-          const newFile: IDEFile = {
-            id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            name, path, content: newContent,
-            language: langMap[ext] || 'plaintext',
-            parentId: parent?.id || null, isFolder: false,
-          };
-          setFiles(prev => [...prev, newFile]);
-          setOpenTabs(prev => [...prev, { fileId: newFile.id, name: newFile.name, path: newFile.path, isModified: false }]);
-          setActiveTabId(newFile.id);
-        } else {
-          const targetPath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
-          const file = files.find(f => f.path === targetPath);
-          if (!file) { allApplied = false; continue; }
-          const newContent = applyPatchToContent(file.content, patch);
-          if (newContent === null) { allApplied = false; continue; }
-          setFiles(prev => prev.map(f => f.path === targetPath ? { ...f, content: newContent } : f));
-        }
-      }
+      const allApplied = autoApplyParsedPatches(patchPreview.patches);
       setPendingPatches(prev => prev.map(p =>
         p.id === patchId
           ? { ...p, status: allApplied ? 'applied' : 'failed', error: allApplied ? undefined : 'Some hunks could not be applied' }
@@ -522,7 +626,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       ));
       return false;
     }
-  }, [pendingPatches, files]);
+  }, [pendingPatches, autoApplyParsedPatches]);
 
   const applyPatch = useCallback((patchId: string) => { applyPatchToFiles(patchId); }, [applyPatchToFiles]);
 
@@ -553,9 +657,9 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     const userMsg: ChatMessage = { id: `msg-${Date.now()}`, role: 'user', content, timestamp: new Date(), contextChips: chips };
     setChatMessages(prev => [...prev, userMsg]);
 
-    // Build context string
     const contextParts: string[] = [];
-    const startedMd = files.find(f => f.path === '/STARTED.md');
+    const currentFiles = filesRef.current;
+    const startedMd = currentFiles.find(f => f.path === '/STARTED.md');
     if (startedMd && startedMd.content.trim()) {
       contextParts.unshift(`[STARTED.md — Project Brief]\n${startedMd.content}`);
     }
@@ -568,14 +672,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
     const contextStr = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
 
-    // Build conversation history for the API
     const apiMessages = chatMessages
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-10)
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
     apiMessages.push({ role: 'user', content });
 
-    // Create a placeholder assistant message for streaming
     const assistantMsgId = `msg-${Date.now() + 1}`;
     let assistantContent = '';
     setChatMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date() }]);
@@ -590,7 +692,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         );
       },
       onDone: () => {
-        // After streaming completes, check for diffs and auto-apply them
+        // 1. Try diff blocks
         const diffRaw = extractDiffFromMessage(assistantContent);
         if (diffRaw) {
           const parsed = parseUnifiedDiff(diffRaw);
@@ -599,79 +701,17 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
             const patchPreview: PatchPreview = { id: patchId, patches: parsed, raw: diffRaw, status: 'preview' };
             setPendingPatches(prev => [...prev, patchPreview]);
 
-            // Auto-apply: create new files and apply modifications
-            for (const patch of parsed) {
-              const isNewFile = patch.oldFile === '/dev/null';
-              if (isNewFile) {
-                const newContent = patch.hunks
-                  .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
-                  .join('\n');
-                const filePath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
-                const fileName = filePath.split('/').pop() || filePath;
-                const ext = fileName.split('.').pop() || '';
-                const langMap: Record<string, string> = {
-                  ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
-                  jsx: 'javascriptreact', json: 'json', md: 'markdown',
-                  py: 'python', css: 'css', html: 'html',
-                  go: 'go', rs: 'rust', c: 'c', cpp: 'cpp', php: 'php',
-                  rb: 'ruby', java: 'java', sol: 'solidity', dart: 'dart',
-                  swift: 'swift', kt: 'kotlin', r: 'r', sh: 'shell',
-                };
+            // Auto-apply using consolidated helper
+            const success = autoApplyParsedPatches(parsed);
 
-                // Ensure parent folders exist
-                const parts = filePath.split('/').filter(Boolean);
-                setFiles(prev => {
-                  const next = [...prev];
-                  for (let i = 1; i < parts.length; i++) {
-                    const folderPath = '/' + parts.slice(0, i).join('/');
-                    if (!next.find(f => f.path === folderPath)) {
-                      const parentPath = i > 1 ? '/' + parts.slice(0, i - 1).join('/') : null;
-                      const parentId = parentPath ? next.find(f => f.path === parentPath)?.id || null : null;
-                      next.push({
-                        id: `folder-${Date.now()}-${i}`,
-                        name: parts[i - 1],
-                        path: folderPath,
-                        content: '',
-                        language: '',
-                        parentId,
-                        isFolder: true,
-                      });
-                    }
-                  }
-                  const parentPath = '/' + parts.slice(0, -1).join('/');
-                  const parentFile = next.find(f => f.path === parentPath);
-                  next.push({
-                    id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-                    name: fileName,
-                    path: filePath,
-                    content: newContent,
-                    language: langMap[ext] || 'plaintext',
-                    parentId: parentFile?.id || null,
-                    isFolder: false,
-                  });
-                  return next;
-                });
-                saveFile(filePath, newContent);
-              } else {
-                // Modify existing file
-                const targetPath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
-                setFiles(prev => {
-                  const file = prev.find(f => f.path === targetPath);
-                  if (!file) return prev;
-                  const newContent = applyPatchToContent(file.content, patch);
-                  if (newContent === null) return prev;
-                  saveFile(targetPath, newContent);
-                  return prev.map(f => f.path === targetPath ? { ...f, content: newContent } : f);
-                });
-              }
-            }
-
-            // Mark patch as applied
             setPendingPatches(prev => prev.map(p =>
-              p.id === patchId ? { ...p, status: 'applied' } : p
+              p.id === patchId ? { ...p, status: success ? 'applied' : 'failed', error: success ? undefined : 'Some hunks could not be applied' } : p
             ));
           }
         }
+
+        // 2. Try file blocks (```lang filepath)
+        autoCreateFileBlocks(assistantContent);
       },
       onError: (error) => {
         setChatMessages(prev =>
@@ -679,7 +719,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         );
       },
     });
-  }, [files, chatMessages]);
+  }, [chatMessages, autoApplyParsedPatches, autoCreateFileBlocks]);
 
   // ─── Runner Session ───
 
@@ -766,8 +806,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setAgentRun(prev => prev ? { ...prev, steps: [...prev.steps, step] } : null);
     };
 
-    // Prepare project files for context
-    const projectFiles = files
+    const projectFiles = filesRef.current
       .filter(f => !f.isFolder)
       .map(f => ({ path: f.path, content: f.content }));
 
@@ -777,7 +816,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       maxIterations: 10,
       signal: abortController.signal,
       onStep: (step, iteration) => {
-        // Skip 'done' type steps — handled by onDone to avoid duplicates
         if (step.type === 'done') return;
         addStep({
           id: step.id,
@@ -791,89 +829,25 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setAgentRun(prev => prev ? { ...prev, iteration } : null);
       },
       onPatch: (diff, summary) => {
-        // Auto-apply agent patches to the file system
         const parsed = parseUnifiedDiff(diff);
         if (parsed.length > 0) {
-          const patchPreview: PatchPreview = { id: `patch-${Date.now()}`, patches: parsed, raw: diff, status: 'preview' };
+          const patchId = `patch-${Date.now()}`;
+          const patchPreview: PatchPreview = { id: patchId, patches: parsed, raw: diff, status: 'preview' };
           setPendingPatches(prev => [...prev, patchPreview]);
 
-          // Apply patches immediately for agent mode
-          for (const patch of parsed) {
-            const isNewFile = patch.oldFile === '/dev/null';
-            if (isNewFile) {
-              // Create new file from patch
-              const newContent = patch.hunks
-                .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
-                .join('\n');
-              const name = patch.newFile.split('/').pop() || patch.newFile;
-              const path = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
-              const ext = name.split('.').pop() || '';
-              const langMap: Record<string, string> = {
-                ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
-                jsx: 'javascriptreact', json: 'json', md: 'markdown',
-                py: 'python', css: 'css', html: 'html',
-              };
+          // Apply using consolidated helper
+          const success = autoApplyParsedPatches(parsed);
 
-              // Ensure parent folders exist
-              const pathParts = path.split('/').filter(Boolean);
-              for (let i = 1; i < pathParts.length; i++) {
-                const folderPath = '/' + pathParts.slice(0, i).join('/');
-                const folderName = pathParts[i - 1];
-                setFiles(prev => {
-                  if (prev.some(f => f.path === folderPath && f.isFolder)) return prev;
-                  const parentFolderPath = i > 1 ? '/' + pathParts.slice(0, i - 1).join('/') : null;
-                  const parentFolder = parentFolderPath ? prev.find(f => f.path === parentFolderPath && f.isFolder) : null;
-                  return [...prev, {
-                    id: `folder-${folderPath}`,
-                    name: folderName,
-                    path: folderPath,
-                    content: '',
-                    language: '',
-                    parentId: parentFolder?.id || null,
-                    isFolder: true,
-                  }];
-                });
-              }
-
-              const parentPath = path.split('/').slice(0, -1).join('/') || null;
-              const parentId = parentPath ? `folder-${parentPath}` : null;
-
-              const newFile: IDEFile = {
-                id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                name, path, content: newContent,
-                language: langMap[ext] || 'plaintext',
-                parentId, isFolder: false,
-              };
-              setFiles(prev => [...prev, newFile]);
-              setOpenTabs(prev => [...prev, { fileId: newFile.id, name: newFile.name, path: newFile.path, isModified: false }]);
-              setActiveTabId(newFile.id);
-              saveFile(path, newContent);
-            } else {
-              // Edit existing file
-              const targetPath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
-              setFiles(prev => {
-                const file = prev.find(f => f.path === targetPath);
-                if (!file) return prev;
-                const newContent = applyPatchToContent(file.content, patch);
-                if (newContent === null) return prev;
-                saveFile(targetPath, newContent);
-                return prev.map(f => f.path === targetPath ? { ...f, content: newContent } : f);
-              });
-            }
-          }
-
-          // Track which files were changed and add a step with file info
+          // Track files changed
           const filesChanged = parsed.map(patch => {
             const filePath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
             const action: 'created' | 'modified' = patch.oldFile === '/dev/null' ? 'created' : 'modified';
             return { path: filePath, action };
           });
 
-          // Update the last patch step with file change info
           setAgentRun(prev => {
             if (!prev) return null;
             const steps = [...prev.steps];
-            // Find the most recent patch step and add filesChanged
             for (let i = steps.length - 1; i >= 0; i--) {
               if (steps[i].type === 'patch' && !steps[i].filesChanged) {
                 steps[i] = { ...steps[i], filesChanged };
@@ -883,14 +857,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
             return { ...prev, steps };
           });
 
-          // Mark patch as applied
           setPendingPatches(prev => prev.map(p =>
-            p.raw === diff ? { ...p, status: 'applied' } : p
+            p.id === patchId ? { ...p, status: success ? 'applied' : 'failed', error: success ? undefined : 'Some hunks failed' } : p
           ));
         }
       },
       onRunCommand: (command, summary) => {
-        // Auto-run the command in the terminal
         runCommand(command);
       },
       onDone: (reason) => {
@@ -919,9 +891,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    // Store abort controller for stop/pause
     (window as any).__agentAbortController = abortController;
-  }, [files, runCommand, saveFile]);
+  }, [runCommand, autoApplyParsedPatches]);
 
   const stopAgent = useCallback(() => {
     agentAbortRef.current = true;
@@ -951,8 +922,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setHooks(prev => prev.filter(h => h.id !== id));
   }, []);
 
-  // ─── MCP ───
-
   const toggleMCPServer = useCallback((id: string) => {
     setMcpServers(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
   }, []);
@@ -971,13 +940,11 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     const ideFiles = buildIDEFilesFromRows(snapshotFiles);
     setFiles(ideFiles);
 
-    // Also persist restored files to project_files
     const fakeIDEFiles = snapshotFiles.map(f => ({
       id: '', name: '', path: f.path, content: f.content, language: '', parentId: null, isFolder: false,
     }));
     saveAllFiles(fakeIDEFiles as any);
 
-    // Reset tabs
     const firstFile = ideFiles.find(f => !f.isFolder);
     if (firstFile) {
       setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
@@ -997,7 +964,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const createProject = useCallback(async (name: string) => {
     const newId = await createProjectRaw(name);
     if (newId) {
-      // Seed new project with demo files
       await switchProjectRaw(newId);
     }
   }, [createProjectRaw, switchProjectRaw]);
@@ -1012,7 +978,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const deleteProjectAction = useCallback(async (pid: string) => {
     const success = await deleteProjectRaw(pid);
     if (success) {
-      // Switch to another project after deletion
       const remaining = projects.filter(p => p.id !== pid);
       if (remaining.length > 0) {
         await switchProjectRaw(remaining[0].id);
@@ -1020,7 +985,6 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   }, [deleteProjectRaw, projects, switchProjectRaw]);
 
-  // Show loading while persistence initializes
   if (persistenceLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
@@ -1053,7 +1017,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       mcpServers, toggleMCPServer,
       activeRightPanel, setActiveRightPanel,
       snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
-      conversations: convPersistence.conversations.filter(c => c.projectId === projectId),
+      conversations: mergedConversations,
       activeConversationId, switchConversation, newConversation, deleteConversation,
       projects, switchProject, createProject, renameProject: renameProjectAction, deleteProject: deleteProjectAction,
       collaborators: collab.collaborators,

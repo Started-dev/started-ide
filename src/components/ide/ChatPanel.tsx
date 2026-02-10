@@ -21,10 +21,16 @@ export function ChatPanel() {
   const [agentMode, setAgentMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const activeTabRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, toolCalls, pendingPatches]);
+
+  // Scroll active conversation tab into view
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+  }, [activeConversationId]);
 
   const addChip = (type: ContextChip['type']) => {
     if (type === 'selection' && selectedText) {
@@ -85,13 +91,14 @@ export function ChatPanel() {
         )}
       </div>
 
-      {/* Conversation History Tabs */}
+      {/* Conversation History Tabs — always visible */}
       <div className="flex items-center border-b border-border bg-muted/30 overflow-x-auto">
         <div className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none">
           {conversations.length > 0 ? (
             conversations.map(conv => (
               <div
                 key={conv.id}
+                ref={conv.id === activeConversationId ? activeTabRef : undefined}
                 className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] cursor-pointer border-r border-border/50 shrink-0 max-w-[140px] transition-colors ${
                   activeConversationId === conv.id
                     ? 'bg-card text-foreground border-b-2 border-b-primary'
