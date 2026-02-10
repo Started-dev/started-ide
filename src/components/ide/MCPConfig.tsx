@@ -26,6 +26,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://vercel.com/account/tokens',
     generateLabel: 'Create a token on Vercel',
   },
+  'mcp-supabase': {
+    storageKey: 'supabase_access_token',
+    label: 'Supabase Access Token',
+    placeholder: 'sbp_xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://supabase.com/dashboard/account/tokens',
+    generateLabel: 'Generate a token on Supabase',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -64,13 +71,16 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         ? { per_page: 5 }
         : serverId === 'mcp-vercel' && toolName === 'vercel_list_projects'
           ? { limit: 5 }
-          : {};
+          : serverId === 'mcp-supabase' && toolName === 'supabase_list_projects'
+            ? {}
+            : {};
       const result = await callMCPTool({
         tool: toolName,
         input: defaultInput,
         serverId,
         githubToken: serverId === 'mcp-github' ? token : undefined,
         vercelToken: serverId === 'mcp-vercel' ? token : undefined,
+        supabaseToken: serverId === 'mcp-supabase' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
