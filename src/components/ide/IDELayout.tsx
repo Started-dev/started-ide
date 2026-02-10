@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
@@ -19,6 +20,7 @@ import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function IDELayout() {
+  const navigate = useNavigate();
   const {
     showChat, toggleChat, toggleOutput, showOutput, project, runCommand,
     openFile, files, theme, toggleTheme, sendMessage, selectedText,
@@ -155,6 +157,13 @@ export function IDELayout() {
           >
             <Play className="h-3 w-3" />
             Run
+          </button>
+          <button
+            onClick={() => navigate('/settings')}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="Account & Billing"
+          >
+            <User className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={signOut}
