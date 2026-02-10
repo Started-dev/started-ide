@@ -179,6 +179,27 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://airtable.com/create/tokens',
     generateLabel: 'Create a token on Airtable',
   },
+  'mcp-jira': {
+    storageKey: 'jira_api_token',
+    label: 'Jira API Token',
+    placeholder: 'xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
+    generateLabel: 'Create an API token on Atlassian',
+    secondaryKey: 'jira_email',
+    secondaryLabel: 'Jira Email Address',
+    secondaryPlaceholder: 'you@company.com',
+    regionKey: 'jira_domain',
+  },
+  'mcp-salesforce': {
+    storageKey: 'sf_access_token',
+    label: 'Salesforce Access Token',
+    placeholder: '00D...!AQ...',
+    generateUrl: 'https://help.salesforce.com/s/articleView?id=sf.remoteaccess_oauth_tokens.htm',
+    generateLabel: 'Salesforce OAuth token docs',
+    secondaryKey: 'sf_instance_url',
+    secondaryLabel: 'Salesforce Instance URL',
+    secondaryPlaceholder: 'https://yourorg.my.salesforce.com',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -264,6 +285,11 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         twilioAuthToken: serverId === 'mcp-twilio' ? secondaryVal : undefined,
         zapierWebhookUrl: serverId === 'mcp-zapier' ? token : undefined,
         airtableToken: serverId === 'mcp-airtable' ? token : undefined,
+        jiraApiToken: serverId === 'mcp-jira' ? token : undefined,
+        jiraEmail: serverId === 'mcp-jira' ? secondaryVal : undefined,
+        jiraDomain: serverId === 'mcp-jira' ? (sessionStorage.getItem('jira_domain') || tokenInputs[`${serverId}_region`]) : undefined,
+        sfAccessToken: serverId === 'mcp-salesforce' ? token : undefined,
+        sfInstanceUrl: serverId === 'mcp-salesforce' ? secondaryVal : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

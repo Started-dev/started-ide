@@ -89,3 +89,9 @@ verify_jwt = false
 
 [functions.mcp-airtable]
 verify_jwt = false
+
+[functions.mcp-jira]
+verify_jwt = false
+
+[functions.mcp-salesforce]
+verify_jwt = false
