@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
@@ -9,6 +9,7 @@ import { CommandPalette } from './CommandPalette';
 import { AgentTimeline } from './AgentTimeline';
 import { MCPConfig } from './MCPConfig';
 import { HooksConfig } from './HooksConfig';
+import { SnapshotBrowser } from './SnapshotBrowser';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -20,11 +21,13 @@ export function IDELayout() {
     activeRightPanel, setActiveRightPanel,
     mcpServers, toggleMCPServer,
     hooks, toggleHook, addHook, removeHook,
+    snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
   } = useIDE();
   const { signOut, user } = useAuth();
 
   const [showMCP, setShowMCP] = useState(false);
   const [showHooks, setShowHooks] = useState(false);
+  const [showSnapshots, setShowSnapshots] = useState(false);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -93,6 +96,14 @@ export function IDELayout() {
           >
             <Anchor className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Hooks</span>
+          </button>
+          <button
+            onClick={() => { setShowSnapshots(true); loadSnapshots(); }}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="File Snapshots"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Snapshots</span>
           </button>
           <button
             onClick={() => setShowMCP(true)}
@@ -230,6 +241,15 @@ export function IDELayout() {
       <CommandPalette />
       {showMCP && <MCPConfig servers={mcpServers} onToggleServer={toggleMCPServer} onClose={() => setShowMCP(false)} />}
       {showHooks && <HooksConfig hooks={hooks} onToggleHook={toggleHook} onAddHook={addHook} onRemoveHook={removeHook} onClose={() => setShowHooks(false)} />}
+      {showSnapshots && (
+        <SnapshotBrowser
+          snapshots={snapshots}
+          loading={snapshotsLoading}
+          onClose={() => setShowSnapshots(false)}
+          onCreateSnapshot={(label) => createSnapshot(label)}
+          onRestoreSnapshot={(id) => { restoreSnapshot(id); setShowSnapshots(false); }}
+        />
+      )}
     </div>
   );
 }

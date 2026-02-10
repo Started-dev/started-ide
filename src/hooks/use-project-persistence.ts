@@ -73,7 +73,7 @@ export function useProjectPersistence(user: User | null) {
 
         if (dbFiles && dbFiles.length > 0) {
           // Convert DB rows to IDEFile[]
-          const ideFiles = buildIDEFilesFromDB(dbFiles);
+          const ideFiles = buildIDEFilesFromRows(dbFiles);
           setState({ projectId, loading: false, initialFiles: ideFiles });
         } else {
           // No files yet — signal to use defaults (null means use demo files)
@@ -161,7 +161,7 @@ export function useProjectPersistence(user: User | null) {
 }
 
 /** Convert flat DB rows [{path, content}] into IDEFile[] with folder structure */
-function buildIDEFilesFromDB(rows: { path: string; content: string }[]): IDEFile[] {
+export function buildIDEFilesFromRows(rows: { path: string; content: string }[]): IDEFile[] {
   const files: IDEFile[] = [];
   const folderPaths = new Set<string>();
 
