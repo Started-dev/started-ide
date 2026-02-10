@@ -37,6 +37,7 @@ export async function streamChat({ messages, context, onDelta, onDone, onError, 
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let finished = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -53,7 +54,7 @@ export async function streamChat({ messages, context, onDelta, onDone, onError, 
       if (!line.startsWith('data: ')) continue;
 
       const jsonStr = line.slice(6).trim();
-      if (jsonStr === '[DONE]') { onDone(); return; }
+      if (jsonStr === '[DONE]') { finished = true; onDone(); return; }
 
       try {
         const parsed = JSON.parse(jsonStr);
@@ -73,7 +74,7 @@ export async function streamChat({ messages, context, onDelta, onDone, onError, 
       if (raw.endsWith('\r')) raw = raw.slice(0, -1);
       if (!raw.startsWith('data: ')) continue;
       const jsonStr = raw.slice(6).trim();
-      if (jsonStr === '[DONE]') continue;
+      if (jsonStr === '[DONE]') { if (!finished) { finished = true; onDone(); } continue; }
       try {
         const parsed = JSON.parse(jsonStr);
         const content = parsed.choices?.[0]?.delta?.content;
@@ -82,7 +83,7 @@ export async function streamChat({ messages, context, onDelta, onDone, onError, 
     }
   }
 
-  onDone();
+  if (!finished) onDone();
 }
 
 interface ApplyPatchRequest {

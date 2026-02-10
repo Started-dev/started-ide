@@ -589,13 +589,86 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         );
       },
       onDone: () => {
-        // After streaming completes, check for diffs in the response
+        // After streaming completes, check for diffs and auto-apply them
         const diffRaw = extractDiffFromMessage(assistantContent);
         if (diffRaw) {
           const parsed = parseUnifiedDiff(diffRaw);
           if (parsed.length > 0) {
-            const patchPreview: PatchPreview = { id: `patch-${Date.now()}`, patches: parsed, raw: diffRaw, status: 'preview' };
+            const patchId = `patch-${Date.now()}`;
+            const patchPreview: PatchPreview = { id: patchId, patches: parsed, raw: diffRaw, status: 'preview' };
             setPendingPatches(prev => [...prev, patchPreview]);
+
+            // Auto-apply: create new files and apply modifications
+            for (const patch of parsed) {
+              const isNewFile = patch.oldFile === '/dev/null';
+              if (isNewFile) {
+                const newContent = patch.hunks
+                  .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
+                  .join('\n');
+                const filePath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
+                const fileName = filePath.split('/').pop() || filePath;
+                const ext = fileName.split('.').pop() || '';
+                const langMap: Record<string, string> = {
+                  ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
+                  jsx: 'javascriptreact', json: 'json', md: 'markdown',
+                  py: 'python', css: 'css', html: 'html',
+                  go: 'go', rs: 'rust', c: 'c', cpp: 'cpp', php: 'php',
+                  rb: 'ruby', java: 'java', sol: 'solidity', dart: 'dart',
+                  swift: 'swift', kt: 'kotlin', r: 'r', sh: 'shell',
+                };
+
+                // Ensure parent folders exist
+                const parts = filePath.split('/').filter(Boolean);
+                setFiles(prev => {
+                  const next = [...prev];
+                  for (let i = 1; i < parts.length; i++) {
+                    const folderPath = '/' + parts.slice(0, i).join('/');
+                    if (!next.find(f => f.path === folderPath)) {
+                      const parentPath = i > 1 ? '/' + parts.slice(0, i - 1).join('/') : null;
+                      const parentId = parentPath ? next.find(f => f.path === parentPath)?.id || null : null;
+                      next.push({
+                        id: `folder-${Date.now()}-${i}`,
+                        name: parts[i - 1],
+                        path: folderPath,
+                        content: '',
+                        language: '',
+                        parentId,
+                        isFolder: true,
+                      });
+                    }
+                  }
+                  const parentPath = '/' + parts.slice(0, -1).join('/');
+                  const parentFile = next.find(f => f.path === parentPath);
+                  next.push({
+                    id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                    name: fileName,
+                    path: filePath,
+                    content: newContent,
+                    language: langMap[ext] || 'plaintext',
+                    parentId: parentFile?.id || null,
+                    isFolder: false,
+                  });
+                  return next;
+                });
+                saveFile(filePath, newContent);
+              } else {
+                // Modify existing file
+                const targetPath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
+                setFiles(prev => {
+                  const file = prev.find(f => f.path === targetPath);
+                  if (!file) return prev;
+                  const newContent = applyPatchToContent(file.content, patch);
+                  if (newContent === null) return prev;
+                  saveFile(targetPath, newContent);
+                  return prev.map(f => f.path === targetPath ? { ...f, content: newContent } : f);
+                });
+              }
+            }
+
+            // Mark patch as applied
+            setPendingPatches(prev => prev.map(p =>
+              p.id === patchId ? { ...p, status: 'applied' } : p
+            ));
           }
         }
       },
@@ -703,6 +776,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       maxIterations: 10,
       signal: abortController.signal,
       onStep: (step, iteration) => {
+        // Skip 'done' type steps — handled by onDone to avoid duplicates
+        if (step.type === 'done') return;
         addStep({
           id: step.id,
           type: step.type as AgentStep['type'],

@@ -12,9 +12,7 @@ interface PatchPreviewProps {
 }
 
 export function PatchPreviewPanel({ patch, onApply, onApplyAndRun, onCancel, onCopyPatch, suggestedCommand }: PatchPreviewProps) {
-  const [expandedFiles, setExpandedFiles] = useState<Set<number>>(
-    new Set(patch.patches.map((_, i) => i))
-  );
+  const [expandedFiles, setExpandedFiles] = useState<Set<number>>(new Set());
 
   const toggleFile = (index: number) => {
     setExpandedFiles(prev => {
