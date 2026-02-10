@@ -1,58 +1,59 @@
 
 
-# Language Auto-Detection for Runtime Selection
+# Fix: Chat and Agent Session Management
 
-## Overview
-Add a utility that scans project files and automatically determines the correct runtime type, replacing the hardcoded `'node'` default. The IDE will re-detect whenever files change (create/delete/rename) and update the project runtime accordingly.
+## Problems Identified
+
+1. **New Conversation button hidden when no conversations exist**: The "+" (new conversation) button in `ChatPanel.tsx` is wrapped inside `{conversations.length > 0 && (...)}` (line 89). If the user is not authenticated or conversations fail to load from the database, `conversations` is empty and the entire tab bar -- including the "+" button -- disappears. This means users lose the ability to create new sessions.
+
+2. **Agent panel has no "New Run" button**: When an agent run completes or fails, the `AgentTimeline` component shows the completed timeline but offers no way to start a new agent run. The only option is to go back to the chat panel, toggle Agent mode on, and type a new goal. There should be a "New Run" button directly in the agent panel.
+
+3. **Conversation initialization race condition**: When `convPersistence.createConversation()` fails (e.g., user not logged in), the conversation is never added to `convPersistence.conversations` state, so the tab bar never appears. The local state (`chatMessages`, `activeConversationId`) works fine, but the UI for managing sessions is broken.
 
 ## Changes
 
-### 1. Update Project type (`src/types/ide.ts`)
-- Expand `runtimeType` from `'node' | 'python' | 'shell'` to use the full `RuntimeType` union from `src/types/runner.ts` so all 15 runtimes are valid project types.
+### 1. Always show conversation header bar (`src/components/ide/ChatPanel.tsx`)
+- Remove the `conversations.length > 0` guard around the conversation tab bar
+- Always render the header area with at least the "+" (new conversation) button
+- When there are no DB-backed conversations, still show a single "New Chat" tab representing the current session
+- This ensures the "+" button is always accessible
 
-### 2. Create detection utility (`src/lib/detect-runtime.ts`)
-A new pure function `detectRuntime(files: IDEFile[]): RuntimeType` that checks file extensions and config files to determine the best runtime:
+### 2. Add "New Run" button to Agent panel (`src/components/ide/AgentTimeline.tsx`)
+- Add a `onNewRun` callback prop
+- When the agent run is completed or failed (not active), show a "New Run" button in the header area
+- Also add a "New Run" button to the empty state (when `agentRun` is null)
+- Wire this up in `IDELayout.tsx` to clear the agent run and switch focus to the chat input with agent mode enabled
 
-Detection priority (first match wins):
-- `Cargo.toml` or `.rs` files --> `rust`
-- `go.mod` or `.go` files --> `go`
-- `pubspec.yaml` or `.dart` files --> `dart`
-- `Package.swift` or `.swift` files --> `swift`
-- `.kt` or `.kts` files --> `kotlin`
-- `composer.json` or `.php` files --> `php`
-- `Gemfile` or `.rb` files --> `ruby`
-- `.sol` files --> `solidity`
-- `.c` files (without `.cpp`/`.h` ambiguity) --> `c`
-- `.cpp` or `.cc` or `.cxx` files --> `cpp`
-- `.java` files --> `java`
-- `.R` or `.r` or `.Rmd` files --> `r`
-- `requirements.txt`, `setup.py`, `pyproject.toml`, or `.py` files --> `python`
-- `.sh` or `.bash` files (and no other language files) --> `shell`
-- Default fallback --> `node`
+### 3. Add `clearAgentRun` to IDEContext (`src/contexts/IDEContext.tsx`)
+- Add a new function `clearAgentRun` that sets `agentRun` to null
+- Expose it through the context so `IDELayout` can pass it to `AgentTimeline`
 
-### 3. Integrate into IDEContext (`src/contexts/IDEContext.tsx`)
-- Import and call `detectRuntime(files)` whenever files change (after initial load, file creation, file deletion, file rename)
-- Update `project.runtimeType` with the detected value
-- Show a toast notification when the runtime changes (e.g., "Runtime detected: Python")
-
-### 4. Extend language map in `createFile`
-- Expand the `langMap` in `IDEContext.createFile` to cover new extensions: `.go`, `.rs`, `.c`, `.cpp`, `.php`, `.rb`, `.java`, `.sol`, `.dart`, `.swift`, `.kt`, `.r`, `.sh`
+### 4. Wire up new run flow (`src/components/ide/IDELayout.tsx`)
+- Pass an `onNewRun` handler to `AgentTimeline` that clears the agent run and switches to the chat panel with a focus hint
 
 ## Technical Details
 
-### Detection Function Signature
-```typescript
-import { RuntimeType } from '@/types/runner';
-import { IDEFile } from '@/types/ide';
+### ChatPanel.tsx changes
+- Lines 89-124: Remove the `conversations.length > 0` wrapper
+- Always show the tab bar; if `conversations` is empty, show a single virtual "New Chat" tab for the current local session
+- The "+" button remains always visible
 
-export function detectRuntime(files: IDEFile[]): RuntimeType;
-```
+### AgentTimeline.tsx changes
+- Add `onNewRun?: () => void` to `AgentTimelineProps`
+- In the empty state (line 76-86): Add a text input + button to start a new agent run directly, or a simpler "Start Agent Run" button
+- When run is complete/failed: Add a "New Run" button next to the status badge in the header
+
+### IDEContext.tsx changes
+- Add `clearAgentRun` function: `() => setAgentRun(null)`
+- Add to context type and provider value
+
+### IDELayout.tsx changes
+- Import `clearAgentRun` from context
+- Pass `onNewRun` to `AgentTimeline` that calls `clearAgentRun()` and switches `activeRightPanel` to `'chat'`
 
 ### Files Modified
-1. `src/types/ide.ts` -- Use `RuntimeType` import for `Project.runtimeType`
-2. `src/lib/detect-runtime.ts` -- New file with detection logic
-3. `src/contexts/IDEContext.tsx` -- Call detector on file changes, update project state
-
-### No Backend Changes Required
-This is purely frontend logic operating on the in-memory file tree.
+1. `src/components/ide/ChatPanel.tsx` -- Always show conversation tabs + "+" button
+2. `src/components/ide/AgentTimeline.tsx` -- Add "New Run" button for completed/empty states
+3. `src/contexts/IDEContext.tsx` -- Add `clearAgentRun`
+4. `src/components/ide/IDELayout.tsx` -- Wire up `onNewRun` handler
 
