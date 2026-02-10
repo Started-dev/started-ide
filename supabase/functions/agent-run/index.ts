@@ -41,7 +41,9 @@ interface AgentRequest {
   history?: Array<{ role: string; content: string }>;
   maxIterations?: number;
   preset_key?: string;
-  run_id?: string; // If resuming an existing run
+  run_id?: string;
+  model?: string;
+  mcp_tools?: Array<{ server: string; name: string; description: string }>;
 }
 
 function getServiceClient() {
@@ -156,7 +158,8 @@ serve(async (req) => {
 
   try {
     const body = await req.json() as AgentRequest;
-    const { goal, project_id, files, history, maxIterations, preset_key, run_id } = body;
+    const { goal, project_id, files, history, maxIterations, preset_key, run_id, model, mcp_tools } = body;
+    const selectedModel = model || "google/gemini-3-flash-preview";
 
     if (!goal) {
       return new Response(
@@ -219,9 +222,23 @@ serve(async (req) => {
 
     const conversationHistory: Array<{ role: string; content: string }> = [
       { role: "system", content: AGENT_SYSTEM_PROMPT },
+    ];
+
+    // Inject MCP tool manifest if provided
+    if (mcp_tools && Array.isArray(mcp_tools) && mcp_tools.length > 0) {
+      const toolList = mcp_tools.map((t: { server: string; name: string; description: string }) =>
+        `- [${t.server}] ${t.name}: ${t.description}`
+      ).join("\n");
+      conversationHistory.push({
+        role: "system",
+        content: `Available MCP Tools:\n${toolList}\n\nYou can use these tools by setting action to "mcp_call" with fields: "mcp_server", "mcp_tool", and "mcp_input". Example:\n{"action":"mcp_call","mcp_server":"github","mcp_tool":"create_issue","mcp_input":{"title":"Bug fix"},"summary":"Creating issue"}`,
+      });
+    }
+
+    conversationHistory.push(
       { role: "user", content: `GOAL: ${goal}\n\nPROJECT FILES:\n${fileContext}` },
       ...(history || []),
-    ];
+    );
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -258,7 +275,7 @@ serve(async (req) => {
               method: "POST",
               headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
               body: JSON.stringify({
-                model: "google/gemini-3-flash-preview",
+                model: selectedModel,
                 messages: conversationHistory,
                 response_format: { type: "json_object" },
               }),
@@ -350,7 +367,16 @@ serve(async (req) => {
               conversationHistory.push({ role: "user", content: `Command \`${parsed.command}\` executed successfully with exit code 0. Continue with next step.` });
             }
 
-            if (!["patch", "run_command", "done", "error"].includes(parsed.action || "")) {
+            if (parsed.action === "mcp_call" && parsed.mcp_tool) {
+              if (agentRunId) {
+                await persistStep(db, agentRunId, iteration, "mcp_call", `MCP: ${parsed.mcp_tool}`, { server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input }, {}, "ok", stepDuration);
+              }
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-mcp`, type: "mcp_call", label: `MCP: ${parsed.mcp_tool}`, detail: parsed.summary, status: "completed" }, iteration });
+              sendEvent({ type: "mcp_call", server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input || {}, summary: parsed.summary });
+              conversationHistory.push({ role: "user", content: `MCP tool \`${parsed.mcp_tool}\` was called. The result will be provided. Continue with next step.` });
+            }
+
+            if (!["patch", "run_command", "done", "error", "mcp_call"].includes(parsed.action || "")) {
               if (agentRunId) {
                 await persistStep(db, agentRunId, iteration, "think", parsed.summary || "Continuing", {}, {}, "ok", stepDuration);
               }

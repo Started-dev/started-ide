@@ -25,7 +25,7 @@ export interface ChatMessage {
 }
 
 export interface ContextChip {
-  type: 'selection' | 'file' | 'errors';
+  type: 'selection' | 'file' | 'errors' | 'url' | 'web' | 'image';
   label: string;
   content: string;
 }

@@ -22,6 +22,7 @@ const stepIcon: Record<AgentStepType, React.ReactNode> = {
   evaluate: <Zap className="h-3.5 w-3.5" />,
   done: <CheckCircle className="h-3.5 w-3.5" />,
   error: <AlertTriangle className="h-3.5 w-3.5" />,
+  mcp_call: <Wrench className="h-3.5 w-3.5" />,
 };
 
 const statusColors: Record<AgentStep['status'], string> = {

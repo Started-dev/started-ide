@@ -12,13 +12,15 @@ async function getAuthToken(): Promise<string> {
 interface StreamChatOptions {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   context?: string;
+  model?: string;
+  mcpTools?: Array<{ server: string; name: string; description: string }>;
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
   signal?: AbortSignal;
 }
 
-export async function streamChat({ messages, context, onDelta, onDone, onError, signal }: StreamChatOptions) {
+export async function streamChat({ messages, context, model, mcpTools, onDelta, onDone, onError, signal }: StreamChatOptions) {
   const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/started`, {
     method: 'POST',
@@ -26,7 +28,7 @@ export async function streamChat({ messages, context, onDelta, onDone, onError, 
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ messages, context }),
+    body: JSON.stringify({ messages, context, model, mcp_tools: mcpTools }),
     signal,
   });
 
@@ -213,16 +215,19 @@ interface StreamAgentOptions {
   files: Array<{ path: string; content: string }>;
   maxIterations?: number;
   presetKey?: string;
+  model?: string;
+  mcpTools?: Array<{ server: string; name: string; description: string }>;
   onStep: (step: AgentStepEvent, iteration: number) => void;
   onPatch: (diff: string, summary: string) => void;
   onRunCommand: (command: string, summary: string) => void;
+  onMCPCall?: (server: string, tool: string, input: Record<string, unknown>) => void;
   onDone: (reason: string) => void;
   onError: (reason: string) => void;
   signal?: AbortSignal;
 }
 
 export async function streamAgent({
-  goal, files, maxIterations, presetKey, onStep, onPatch, onRunCommand, onDone, onError, signal,
+  goal, files, maxIterations, presetKey, model, mcpTools, onStep, onPatch, onRunCommand, onMCPCall, onDone, onError, signal,
 }: StreamAgentOptions) {
   const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
@@ -231,7 +236,7 @@ export async function streamAgent({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ goal, files, maxIterations, presetKey }),
+    body: JSON.stringify({ goal, files, maxIterations, presetKey, model, mcp_tools: mcpTools }),
     signal,
   });
 
@@ -267,6 +272,8 @@ export async function streamAgent({
             onPatch(parsed.diff, parsed.summary);
           } else if (parsed.type === 'run_command') {
             onRunCommand(parsed.command, parsed.summary);
+          } else if (parsed.type === 'mcp_call' && onMCPCall) {
+            onMCPCall(parsed.server, parsed.tool, parsed.input);
           } else if (parsed.type === 'agent_done') {
             onDone(parsed.reason);
           } else if (parsed.type === 'agent_error') {

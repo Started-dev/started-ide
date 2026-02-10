@@ -91,7 +91,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, context, project_id } = await req.json();
+    const { messages, context, project_id, model, mcp_tools } = await req.json();
+    const selectedModel = model || "google/gemini-3-flash-preview";
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -135,6 +136,17 @@ serve(async (req) => {
       });
     }
 
+    // ─── Inject MCP tool manifest ───
+    if (mcp_tools && Array.isArray(mcp_tools) && mcp_tools.length > 0) {
+      const toolList = mcp_tools.map((t: { server: string; name: string; description: string }) =>
+        `- [${t.server}] ${t.name}: ${t.description}`
+      ).join("\n");
+      systemMessages.push({
+        role: "system",
+        content: `Available MCP Tools (the user has these integrations connected):\n${toolList}\n\nYou can reference these tools in your responses. When suggesting tool usage, mention the tool by name.`,
+      });
+    }
+
     const allMessages = [...systemMessages, ...messages];
 
     const response = await fetch(
@@ -146,7 +158,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: selectedModel,
           messages: allMessages,
           stream: true,
         }),

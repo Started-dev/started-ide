@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User, Shield, Rocket } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User, Shield, Rocket, Cloud } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
@@ -18,6 +18,7 @@ import { TransactionBuilder } from './TransactionBuilder';
 import { PresenceAvatars } from './PresenceAvatars';
 import { PermissionRulesManager } from './PermissionRulesManager';
 import { CICDPanel } from './CICDPanel';
+import { OpenClawPanel } from './OpenClawPanel';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOpenClawEvents } from '@/hooks/use-openclaw-events';
@@ -50,6 +51,7 @@ export function IDELayout() {
   const [showTxBuilder, setShowTxBuilder] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [showCICD, setShowCICD] = useState(false);
+  const [showOpenClaw, setShowOpenClaw] = useState(false);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -165,6 +167,14 @@ export function IDELayout() {
           >
             <Rocket className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">CI/CD</span>
+          </button>
+          <button
+            onClick={() => setShowOpenClaw(true)}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="OpenClaw"
+          >
+            <Cloud className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Claw</span>
           </button>
           <PresenceAvatars users={presenceUsers} onClick={() => setShowCollab(true)} />
           <button
@@ -373,6 +383,7 @@ export function IDELayout() {
       {showTxBuilder && <TransactionBuilder onClose={() => setShowTxBuilder(false)} />}
       {showPermissions && <PermissionRulesManager onClose={() => setShowPermissions(false)} />}
       {showCICD && <CICDPanel projectId={project.id} onClose={() => setShowCICD(false)} />}
+      {showOpenClaw && <OpenClawPanel onClose={() => setShowOpenClaw(false)} />}
     </div>
   );
 }

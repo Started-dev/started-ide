@@ -61,6 +61,8 @@ const LANG_MAP: Record<string, string> = {
   r: 'r', sh: 'shell', bash: 'shell',
 };
 
+import type { ModelId } from '@/components/ide/ModelSelector';
+
 interface IDEContextType {
   project: Project;
   setRuntimeType: (rt: RuntimeType) => void;
@@ -151,6 +153,8 @@ interface IDEContextType {
   approvePermission: () => void;
   denyPermission: () => void;
   alwaysAllowPermission: () => void;
+  selectedModel: ModelId;
+  setSelectedModel: (model: ModelId) => void;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -187,6 +191,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [permissionPolicy, setPermissionPolicy] = useState<PermissionPolicy>(DEFAULT_PERMISSION_POLICY);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [pendingPermission, setPendingPermission] = useState<(PermissionRequest & { runId: string }) | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelId>('google/gemini-3-flash-preview');
 
   // Agent state
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
@@ -685,6 +690,11 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
     const contextStr = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
 
+    // Gather enabled MCP tools for AI context
+    const enabledMcpTools = mcpServers
+      .filter(s => s.enabled && s.authConfigured)
+      .flatMap(s => s.tools.map(t => ({ server: s.name, name: t.name, description: t.description })));
+
     const apiMessages = chatMessages
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-10)
@@ -698,6 +708,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     streamChat({
       messages: apiMessages,
       context: contextStr,
+      model: selectedModel,
+      mcpTools: enabledMcpTools.length > 0 ? enabledMcpTools : undefined,
       onDelta: (chunk) => {
         assistantContent += chunk;
         setChatMessages(prev =>
@@ -732,7 +744,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         );
       },
     });
-  }, [chatMessages, autoApplyParsedPatches, autoCreateFileBlocks]);
+  }, [chatMessages, autoApplyParsedPatches, autoCreateFileBlocks, selectedModel, mcpServers]);
 
   // ─── Runner Session ───
 
@@ -903,11 +915,18 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
     const presetKey = localStorage.getItem('default_agent_preset') || undefined;
 
+    // Gather enabled MCP tools
+    const enabledMcpTools = mcpServers
+      .filter(s => s.enabled && s.authConfigured)
+      .flatMap(s => s.tools.map(t => ({ server: s.name, name: t.name, description: t.description })));
+
     streamAgent({
       goal,
       files: projectFiles,
       maxIterations: 10,
       presetKey,
+      model: selectedModel,
+      mcpTools: enabledMcpTools.length > 0 ? enabledMcpTools : undefined,
       signal: abortController.signal,
       onStep: (step, iteration) => {
         if (step.type === 'done') return;
@@ -923,6 +942,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setAgentRun(prev => prev ? { ...prev, iteration } : null);
       },
       onPatch: (diff, summary) => {
+        toast({ title: '📝 Patch applied', description: summary?.slice(0, 60) });
         const parsed = parseUnifiedDiff(diff);
         if (parsed.length > 0) {
           const patchId = `patch-${Date.now()}`;
@@ -932,10 +952,13 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
           // Apply using consolidated helper
           const success = autoApplyParsedPatches(parsed);
 
-          // Track files changed
+          // Track files changed and toast new files
           const filesChanged = parsed.map(patch => {
             const filePath = patch.newFile.startsWith('/') ? patch.newFile : `/${patch.newFile}`;
             const action: 'created' | 'modified' = patch.oldFile === '/dev/null' ? 'created' : 'modified';
+            if (action === 'created') {
+              toast({ title: `📄 Created: ${filePath}` });
+            }
             return { path: filePath, action };
           });
 
@@ -971,6 +994,18 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         });
         setAgentRun(prev => prev ? { ...prev, status: 'completed', completedAt: new Date() } : null);
       },
+      onMCPCall: (server, tool, input) => {
+        addStep({
+          id: `step-mcp-${Date.now()}`,
+          type: 'mcp_call',
+          label: `MCP: ${tool} (${server})`,
+          detail: JSON.stringify(input).slice(0, 200),
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+        });
+        toast({ title: `🔌 MCP Tool: ${tool}`, description: `Server: ${server}` });
+      },
       onError: (reason) => {
         addStep({
           id: `step-err-${Date.now()}`,
@@ -986,7 +1021,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     });
 
     (window as any).__agentAbortController = abortController;
-  }, [runCommand, autoApplyParsedPatches]);
+  }, [runCommand, autoApplyParsedPatches, selectedModel, mcpServers]);
 
   const stopAgent = useCallback(() => {
     agentAbortRef.current = true;
@@ -1136,6 +1171,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       approvePermission,
       denyPermission,
       alwaysAllowPermission,
+      selectedModel, setSelectedModel,
     }}>
       {children}
     </IDEContext.Provider>

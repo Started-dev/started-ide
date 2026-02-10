@@ -1,11 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { Send, AtSign, FileCode, AlertCircle, Brain, Plus, X, MessageSquare } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, AtSign, FileCode, AlertCircle, Brain, Plus, X, MessageSquare, Globe, Image, Link } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { useIDE } from '@/contexts/IDEContext';
 import { ContextChip } from '@/types/ide';
 import { PermissionPrompt } from './PermissionPrompt';
 import { PatchPreviewPanel } from './PatchPreview';
 import { ToolCallDisplay } from './ToolCallDisplay';
+import { ModelSelector } from './ModelSelector';
 import { extractCommandsFromMessage } from '@/lib/patch-utils';
 
 export function ChatPanel() {
@@ -15,6 +16,7 @@ export function ChatPanel() {
     applyPatch, applyPatchAndRun, cancelPatch,
     startAgent, setActiveRightPanel,
     conversations, activeConversationId, switchConversation, newConversation, deleteConversation,
+    selectedModel, setSelectedModel,
   } = useIDE();
   const [input, setInput] = useState('');
   const [chips, setChips] = useState<ContextChip[]>([]);
@@ -22,12 +24,12 @@ export function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeTabRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, toolCalls, pendingPatches]);
 
-  // Scroll active conversation tab into view
   useEffect(() => {
     activeTabRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   }, [activeConversationId]);
@@ -45,8 +47,32 @@ export function ChatPanel() {
       if (lastRun) {
         setChips(prev => [...prev.filter(c => c.type !== 'errors'), { type: 'errors', label: 'Last Run Errors', content: lastRun.logs }]);
       }
+    } else if (type === 'url') {
+      const url = prompt('Enter URL to fetch:');
+      if (url) {
+        setChips(prev => [...prev, { type: 'url', label: url.slice(0, 30), content: `[Fetch URL: ${url}]` }]);
+      }
+    } else if (type === 'web') {
+      const query = prompt('Enter web search query:');
+      if (query) {
+        setChips(prev => [...prev, { type: 'web', label: query.slice(0, 30), content: `[Web Search: ${query}]` }]);
+      }
+    } else if (type === 'image') {
+      imageInputRef.current?.click();
     }
   };
+
+  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setChips(prev => [...prev, { type: 'image', label: file.name.slice(0, 20), content: base64 }]);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
 
   const removeChip = (index: number) => setChips(prev => prev.filter((_, i) => i !== index));
 
@@ -71,6 +97,9 @@ export function ChatPanel() {
       case 'selection': return <AtSign className="h-3 w-3" />;
       case 'file': return <FileCode className="h-3 w-3" />;
       case 'errors': return <AlertCircle className="h-3 w-3" />;
+      case 'url': return <Link className="h-3 w-3" />;
+      case 'web': return <Globe className="h-3 w-3" />;
+      case 'image': return <Image className="h-3 w-3" />;
       default: return null;
     }
   };
@@ -91,7 +120,7 @@ export function ChatPanel() {
         )}
       </div>
 
-      {/* Conversation History Tabs — always visible */}
+      {/* Conversation History Tabs */}
       <div className="flex items-center border-b border-border bg-muted/30 overflow-x-auto">
         <div className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none">
           {conversations.length > 0 ? (
@@ -200,13 +229,20 @@ export function ChatPanel() {
         </div>
       )}
 
+      {/* Hidden image input */}
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+
       {/* Input */}
       <div className="border-t border-border p-3 space-y-2">
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           <button onClick={() => addChip('selection')} className={`text-[10px] px-2 py-1 rounded-sm transition-colors ${selectedText ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-muted text-muted-foreground'}`} disabled={!selectedText}>@selection</button>
           <button onClick={() => addChip('file')} className={`text-[10px] px-2 py-1 rounded-sm transition-colors ${activeTabId ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-muted text-muted-foreground'}`} disabled={!activeTabId}>@file</button>
           <button onClick={() => addChip('errors')} className={`text-[10px] px-2 py-1 rounded-sm transition-colors ${runs.length > 0 ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-muted text-muted-foreground'}`} disabled={runs.length === 0}>@errors</button>
+          <button onClick={() => addChip('url')} className="text-[10px] px-2 py-1 rounded-sm transition-colors bg-primary/10 text-primary hover:bg-primary/20">@url</button>
+          <button onClick={() => addChip('web')} className="text-[10px] px-2 py-1 rounded-sm transition-colors bg-primary/10 text-primary hover:bg-primary/20">@web</button>
+          <button onClick={() => addChip('image')} className="text-[10px] px-2 py-1 rounded-sm transition-colors bg-primary/10 text-primary hover:bg-primary/20">@image</button>
           <div className="flex-1" />
+          <ModelSelector value={selectedModel} onChange={setSelectedModel} />
           <button
             onClick={() => setAgentMode(prev => !prev)}
             className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-sm transition-colors ${

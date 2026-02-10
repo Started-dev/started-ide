@@ -2,7 +2,7 @@ import { ToolCall } from './tools';
 
 // ─── Agent Timeline ───
 
-export type AgentStepType = 'think' | 'tool_call' | 'patch' | 'run' | 'evaluate' | 'done' | 'error';
+export type AgentStepType = 'think' | 'tool_call' | 'patch' | 'run' | 'evaluate' | 'done' | 'error' | 'mcp_call';
 
 export interface AgentStep {
   id: string;
