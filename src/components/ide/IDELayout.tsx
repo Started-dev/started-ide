@@ -18,6 +18,7 @@ import { TransactionBuilder } from './TransactionBuilder';
 import { PresenceAvatars } from './PresenceAvatars';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOpenClawEvents } from '@/hooks/use-openclaw-events';
 
 export function IDELayout() {
   const navigate = useNavigate();
@@ -34,6 +35,9 @@ export function IDELayout() {
     isProjectOwner, inviteCollaborator, removeCollaborator, sendCollabMessage,
   } = useIDE();
   const { signOut, user } = useAuth();
+
+  // Subscribe to OpenClaw real-time webhook events
+  useOpenClawEvents(project?.id);
 
   const [showMCP, setShowMCP] = useState(false);
   const [showHooks, setShowHooks] = useState(false);
