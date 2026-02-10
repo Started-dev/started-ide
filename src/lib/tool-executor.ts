@@ -128,7 +128,8 @@ export function describeToolCall(call: ToolCall): string {
 
 /**
  * Execute a tool call against the local file system (in-memory).
- * This is the mock executor — TODO: wire to real backend POST endpoints.
+ * Read-only tools execute locally; write/run tools return a redirect
+ * so the caller can route through the real backend.
  */
 export function executeToolLocally(
   call: ToolCall,
@@ -173,46 +174,21 @@ export function executeToolLocally(
         return { ok: true, matches, duration_ms: Date.now() - startTime };
       }
 
-      case 'git_status': {
-        return {
-          ok: true,
-          stdout: 'On branch main\nnothing to commit, working tree clean',
-          duration_ms: Date.now() - startTime,
-        };
-      }
-
-      case 'run_command': {
-        const command = input.command as string;
-        // Mock runner: simulate common commands
-        if (command.includes('test')) {
-          return {
-            ok: true, exit_code: 0, cwd: '/workspace',
-            stdout: 'PASS  src/utils.test.ts\n  ✓ greet (2ms)\n  ✓ add (1ms)\n\nTest Suites: 1 passed, 1 total\nTests:       2 passed, 2 total',
-            stderr: '',
-            duration_ms: Date.now() - startTime + 1200,
-          };
-        }
-        return {
-          ok: true, exit_code: 0, cwd: '/workspace',
-          stdout: `$ ${command}\n[mock] Command executed successfully`,
-          stderr: '',
-          duration_ms: Date.now() - startTime + 500,
-        };
-      }
-
       case 'apply_patch': {
         // Patches are handled separately by the PatchPreview component
         return { ok: true, content: 'Patch queued for preview', duration_ms: Date.now() - startTime };
       }
 
+      // Tools that require the real backend — return an error directing the caller
+      case 'git_status':
+        return { ok: false, error: 'git_status requires the runner backend. Use the terminal instead.', duration_ms: Date.now() - startTime };
+
+      case 'run_command':
+        return { ok: false, error: 'run_command must be routed through the remote runner. Use runCommandRemote.', duration_ms: Date.now() - startTime };
+
       case 'web_fetch':
-      case 'web_search': {
-        return {
-          ok: false,
-          error: 'Web tools require backend integration (not available in local mode)',
-          duration_ms: Date.now() - startTime,
-        };
-      }
+      case 'web_search':
+        return { ok: false, error: 'Web tools require backend integration (not available in local mode)', duration_ms: Date.now() - startTime };
 
       default:
         return { ok: false, error: `Unknown tool: ${call.tool}`, duration_ms: Date.now() - startTime };

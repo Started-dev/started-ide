@@ -127,10 +127,32 @@ export function useProjectPersistence(user: User | null) {
     }
   }, []);
 
-  // Create a new project
+  // Create a new project (enforces max_projects quota)
   const createProject = useCallback(async (name: string): Promise<string | null> => {
     if (!user) return null;
     try {
+      // Check plan quota
+      const { data: ledger } = await supabase
+        .from('api_usage_ledger')
+        .select('plan_key')
+        .eq('owner_id', user.id)
+        .order('period_start', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const planKey = ledger?.plan_key || 'free';
+      const { data: plan } = await supabase
+        .from('billing_plans')
+        .select('max_projects')
+        .eq('key', planKey)
+        .maybeSingle();
+
+      const maxProjects = plan?.max_projects || 2;
+      if (state.projects.length >= maxProjects) {
+        console.error(`Project limit reached (${maxProjects} for ${planKey} plan). Upgrade to create more.`);
+        return null;
+      }
+
       const { data: newProj, error } = await supabase
         .from('projects')
         .insert({ owner_id: user.id, name })
@@ -146,7 +168,7 @@ export function useProjectPersistence(user: User | null) {
       console.error('Failed to create project:', err);
       return null;
     }
-  }, [user]);
+  }, [user, state.projects.length]);
 
   // Rename a project
   const renameProject = useCallback(async (projectIdToRename: string, newName: string) => {

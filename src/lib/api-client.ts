@@ -1,7 +1,13 @@
 import { supabase } from '@/integrations/supabase/client';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+/** Get the current user's session token, falling back to anon key. */
+async function getAuthToken(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token || SUPABASE_ANON_KEY;
+}
 
 interface StreamChatOptions {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -13,11 +19,12 @@ interface StreamChatOptions {
 }
 
 export async function streamChat({ messages, context, onDelta, onDone, onError, signal }: StreamChatOptions) {
+  const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/started`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ messages, context }),
     signal,
@@ -125,11 +132,12 @@ interface RunCommandOptions {
 }
 
 export async function runCommandRemote({ command, cwd, timeoutS, projectId, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
+  const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/run-command`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId }),
     signal,
@@ -215,11 +223,12 @@ interface StreamAgentOptions {
 export async function streamAgent({
   goal, files, maxIterations, onStep, onPatch, onRunCommand, onDone, onError, signal,
 }: StreamAgentOptions) {
+  const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${SUPABASE_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ goal, files, maxIterations }),
     signal,

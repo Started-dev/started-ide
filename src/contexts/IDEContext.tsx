@@ -733,10 +733,9 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (runnerSession && runnerSession.status === 'ready') return runnerSession;
     const client = runnerClientRef.current;
     const session = await client.createSession(project.id, project.runtimeType);
-    await client.syncWorkspace(session.id, files.filter(f => !f.isFolder));
     setRunnerSession(session);
     return session;
-  }, [runnerSession, project.id, project.runtimeType, files]);
+  }, [runnerSession, project.id, project.runtimeType]);
 
   const killRunningProcess = useCallback(async () => {
     if (!runnerSession) return;
