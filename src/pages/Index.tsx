@@ -58,16 +58,19 @@ const Index = () => {
             return;
           }
 
-          // Seed template files
-          if (templateFiles.length > 0) {
-            const rows = templateFiles.map(f => ({
-              project_id: proj.id,
-              path: f.path,
-              content: f.content,
-              updated_at: new Date().toISOString(),
-            }));
-            await supabase.from('project_files').upsert(rows, { onConflict: 'project_id,path' });
-          }
+          // Seed template files + always include STARTED.md
+          const { STARTED_MD_CONTENT } = await import('@/contexts/IDEContext');
+          const allFiles = [
+            { path: '/STARTED.md', content: STARTED_MD_CONTENT },
+            ...templateFiles.filter(f => f.path !== '/STARTED.md'),
+          ];
+          const rows = allFiles.map(f => ({
+            project_id: proj.id,
+            path: f.path,
+            content: f.content,
+            updated_at: new Date().toISOString(),
+          }));
+          await supabase.from('project_files').upsert(rows, { onConflict: 'project_id,path' });
 
           // Store goal for the IDE to pick up after mount
           if (goal) {
