@@ -373,7 +373,7 @@ function BillingTab({
                   </li>
                   <li className="flex items-center gap-1.5">
                     <Check className="h-3 w-3 text-ide-success shrink-0" />
-                    {plan.max_projects === 999 ? 'Unlimited' : plan.max_projects} projects
+                    {plan.max_projects < 0 || plan.max_projects >= 999 ? 'Unlimited' : plan.max_projects} projects
                   </li>
                   <li className="flex items-center gap-1.5">
                     <Check className="h-3 w-3 text-ide-success shrink-0" />

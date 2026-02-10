@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User, Shield, Rocket, Cloud } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User, Shield, Rocket, Cloud, Download } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
@@ -19,9 +19,13 @@ import { PresenceAvatars } from './PresenceAvatars';
 import { PermissionRulesManager } from './PermissionRulesManager';
 import { CICDPanel } from './CICDPanel';
 import { OpenClawPanel } from './OpenClawPanel';
+import { Web3Modal } from './Web3Modal';
+import { InstallModal } from './InstallModal';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOpenClawEvents } from '@/hooks/use-openclaw-events';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export function IDELayout() {
   const navigate = useNavigate();
@@ -49,9 +53,30 @@ export function IDELayout() {
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
   const [showTxBuilder, setShowTxBuilder] = useState(false);
+  const [showWeb3, setShowWeb3] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [showCICD, setShowCICD] = useState(false);
   const [showOpenClaw, setShowOpenClaw] = useState(false);
+  const [userPlanKey, setUserPlanKey] = useState<string>('free');
+
+  // Fetch user plan for feature gating
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('api_usage_ledger').select('plan_key').eq('owner_id', user.id)
+      .order('period_start', { ascending: false }).limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) setUserPlanKey(data[0].plan_key);
+      });
+  }, [user?.id]);
+
+  const handleCollabClick = () => {
+    if (userPlanKey === 'pro' || userPlanKey === 'studio') {
+      setShowCollab(true);
+    } else {
+      toast.error('Collaboration is available on Pro and Studio plans. Upgrade in Settings.');
+    }
+  };
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -142,7 +167,7 @@ export function IDELayout() {
             title="Permission Rules"
           >
             <Shield className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Perms</span>
+            <span className="hidden sm:inline">Permissions</span>
           </button>
           <button
             onClick={() => setShowMCP(true)}
@@ -153,12 +178,12 @@ export function IDELayout() {
             <span className="hidden sm:inline">MCP</span>
           </button>
           <button
-            onClick={() => setShowTxBuilder(true)}
+            onClick={() => setShowWeb3(true)}
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
-            title="Transaction Builder"
+            title="Web3 Integrations"
           >
             <Zap className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">TX</span>
+            <span className="hidden sm:inline">Web3</span>
           </button>
           <button
             onClick={() => setShowCICD(true)}
@@ -169,16 +194,16 @@ export function IDELayout() {
             <span className="hidden sm:inline">CI/CD</span>
           </button>
           <button
-            onClick={() => setShowOpenClaw(true)}
+            onClick={() => setShowInstall(true)}
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
-            title="OpenClaw"
+            title="Install Services"
           >
-            <Cloud className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Claw</span>
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Install</span>
           </button>
-          <PresenceAvatars users={presenceUsers} onClick={() => setShowCollab(true)} />
+          <PresenceAvatars users={presenceUsers} onClick={handleCollabClick} />
           <button
-            onClick={() => setShowCollab(true)}
+            onClick={handleCollabClick}
             className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
             title="Collaboration"
           >
@@ -384,6 +409,17 @@ export function IDELayout() {
       {showPermissions && <PermissionRulesManager onClose={() => setShowPermissions(false)} />}
       {showCICD && <CICDPanel projectId={project.id} onClose={() => setShowCICD(false)} />}
       {showOpenClaw && <OpenClawPanel onClose={() => setShowOpenClaw(false)} />}
+      <Web3Modal
+        open={showWeb3}
+        onClose={() => setShowWeb3(false)}
+        onOpenTxBuilder={() => setShowTxBuilder(true)}
+        onOpenMCP={(key) => { setShowMCP(true); /* MCP panel opens; server key can be used for filtering */ }}
+      />
+      <InstallModal
+        open={showInstall}
+        onClose={() => setShowInstall(false)}
+        onOpenOpenClaw={() => setShowOpenClaw(true)}
+      />
     </div>
   );
 }
