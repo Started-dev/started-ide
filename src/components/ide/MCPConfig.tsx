@@ -4,6 +4,7 @@ import { MCPServer } from '@/types/agent';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { callMCPTool } from '@/lib/mcp-client';
+import { WalletConnect } from '@/components/ide/WalletConnect';
 
 interface MCPConfigProps {
   servers: MCPServer[];
@@ -537,6 +538,13 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
                         >
                           {cfg.generateLabel} <ExternalLink className="h-2.5 w-2.5" />
                         </a>
+                      </div>
+                    )}
+
+                    {/* Wallet Connect for TX Simulator */}
+                    {server.id === 'mcp-tx-simulator' && (
+                      <div className="mt-2 mb-3 p-2.5 rounded-sm border border-border bg-muted/30">
+                        <WalletConnect />
                       </div>
                     )}
 

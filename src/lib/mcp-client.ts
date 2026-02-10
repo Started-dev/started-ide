@@ -1,5 +1,76 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// ─── Client-side wallet tool execution ───
+
+function getEthereum(): any | null {
+  if (typeof window !== 'undefined' && (window as any).ethereum) {
+    return (window as any).ethereum;
+  }
+  return null;
+}
+
+async function handleWalletTool(tool: string, input: Record<string, unknown>): Promise<MCPToolCallResult> {
+  const ethereum = getEthereum();
+
+  switch (tool) {
+    case 'wallet_get_address': {
+      if (!ethereum) return { ok: false, error: 'No wallet detected. Install MetaMask.' };
+      try {
+        const accounts: string[] = await ethereum.request({ method: 'eth_accounts' });
+        if (!accounts?.length) return { ok: false, error: 'No wallet connected. Click Connect in MCP Config.' };
+        const chainIdHex = await ethereum.request({ method: 'eth_chainId' });
+        const chainId = parseInt(chainIdHex, 16);
+        const balHex = await ethereum.request({ method: 'eth_getBalance', params: [accounts[0], 'latest'] });
+        const balEth = Number(BigInt(balHex)) / 1e18;
+        return { ok: true, result: { address: accounts[0], chainId, balance: balEth.toFixed(4) } };
+      } catch (err: any) {
+        return { ok: false, error: err?.message || 'Failed to get wallet address' };
+      }
+    }
+
+    case 'wallet_send_transaction': {
+      if (!ethereum) return { ok: false, error: 'No wallet detected' };
+      try {
+        const accounts: string[] = await ethereum.request({ method: 'eth_accounts' });
+        if (!accounts?.length) return { ok: false, error: 'No wallet connected' };
+        const hash = await ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [{
+            from: accounts[0],
+            to: input.to as string,
+            data: (input.data as string) || '0x',
+            value: (input.value as string) || '0x0',
+            ...(input.gas ? { gas: input.gas as string } : {}),
+          }],
+        });
+        return { ok: true, result: { hash, from: accounts[0] } };
+      } catch (err: any) {
+        if (err?.code === 4001) return { ok: false, error: 'Transaction rejected by user' };
+        return { ok: false, error: err?.message || 'Transaction failed' };
+      }
+    }
+
+    case 'wallet_sign_message': {
+      if (!ethereum) return { ok: false, error: 'No wallet detected' };
+      try {
+        const accounts: string[] = await ethereum.request({ method: 'eth_accounts' });
+        if (!accounts?.length) return { ok: false, error: 'No wallet connected' };
+        const signature = await ethereum.request({
+          method: 'personal_sign',
+          params: [input.message as string, accounts[0]],
+        });
+        return { ok: true, result: { signature, signer: accounts[0] } };
+      } catch (err: any) {
+        if (err?.code === 4001) return { ok: false, error: 'Signing rejected by user' };
+        return { ok: false, error: err?.message || 'Signing failed' };
+      }
+    }
+
+    default:
+      return { ok: false, error: `Unknown wallet tool: ${tool}` };
+  }
+}
+
 export interface MCPToolCallRequest {
   tool: string;
   input: Record<string, unknown>;
@@ -61,6 +132,11 @@ export interface MCPToolCallResult {
 
 export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallResult> {
   const body: Record<string, unknown> = { tool: req.tool, input: req.input };
+
+  // ─── Client-side wallet tools: execute in browser ───
+  if (req.tool.startsWith('wallet_')) {
+    return handleWalletTool(req.tool, req.input);
+  }
 
   // ─── Web3 Gateway: route Web3 tools through centralized gateway ───
   const isWeb3Tool = /^(evm_|contract_|solana_|sim_)/.test(req.tool);

@@ -703,7 +703,7 @@ export const BUILTIN_MCP_SERVERS: MCPServer[] = [
   {
     id: 'mcp-tx-simulator',
     name: 'Transaction Simulator',
-    description: 'Simulate, trace, and analyze EVM transactions without broadcasting',
+    description: 'Simulate, trace, sign and send EVM transactions with wallet support',
     icon: '🧪',
     enabled: false,
     requiresAuth: true,
@@ -715,6 +715,9 @@ export const BUILTIN_MCP_SERVERS: MCPServer[] = [
       { name: 'sim_tenderly_simulate', description: 'Full simulation via Tenderly API', inputSchema: { from: { type: 'string' }, to: { type: 'string' }, data: { type: 'string' }, value: { type: 'string' }, chain_id: { type: 'number' }, save: { type: 'boolean' } } },
       { name: 'sim_compare_gas', description: 'Compare gas costs of multiple calls', inputSchema: { calls: { type: 'array' } } },
       { name: 'sim_decode_revert', description: 'Simulate and decode revert reason', inputSchema: { from: { type: 'string' }, to: { type: 'string' }, data: { type: 'string' }, value: { type: 'string' } } },
+      { name: 'wallet_send_transaction', description: 'Sign & send transaction via connected wallet (requires approval)', inputSchema: { to: { type: 'string' }, data: { type: 'string' }, value: { type: 'string' }, gas: { type: 'string' } } },
+      { name: 'wallet_sign_message', description: 'Sign a message with connected wallet', inputSchema: { message: { type: 'string' } } },
+      { name: 'wallet_get_address', description: 'Get connected wallet address and chain', inputSchema: {} },
     ],
   },
   {

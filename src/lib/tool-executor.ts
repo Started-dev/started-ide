@@ -27,6 +27,9 @@ const WEB3_TOOL_CLASSIFICATION: Record<string, Web3OpType> = {
   sim_eth_call: 'SIMULATE', sim_estimate_gas: 'SIMULATE',
   sim_trace_call: 'SIMULATE', sim_tenderly_simulate: 'SIMULATE',
   sim_compare_gas: 'SIMULATE', sim_decode_revert: 'SIMULATE',
+  // Wallet operations — WRITE tier (requires user approval)
+  wallet_send_transaction: 'WRITE', wallet_sign_message: 'WRITE',
+  wallet_get_address: 'READ',
 };
 
 export function getWeb3OpType(toolName: string): Web3OpType | null {

@@ -68,7 +68,7 @@ function Web3OpBadge({ toolName }: { toolName: string }) {
 
 function isWeb3MCP(detail?: string): boolean {
   if (!detail) return false;
-  return /^(evm_|contract_|solana_|sim_)/.test(detail);
+  return /^(evm_|contract_|solana_|sim_|wallet_)/.test(detail);
 }
 
 export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTimelineProps) {

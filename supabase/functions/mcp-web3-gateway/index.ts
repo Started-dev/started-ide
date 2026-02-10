@@ -86,6 +86,9 @@ const TOOL_CLASSIFICATION: Record<string, Web3OpType> = {
   sim_eth_call: 'SIMULATE', sim_estimate_gas: 'SIMULATE',
   sim_trace_call: 'SIMULATE', sim_tenderly_simulate: 'SIMULATE',
   sim_compare_gas: 'SIMULATE', sim_decode_revert: 'SIMULATE',
+  // Wallet operations
+  wallet_send_transaction: 'WRITE', wallet_sign_message: 'WRITE',
+  wallet_get_address: 'READ',
 };
 
 function classifyTool(toolName: string): Web3OpType {
@@ -124,6 +127,7 @@ function resolveServer(tool: string): string | null {
   if (tool.startsWith('contract_')) return 'mcp-contract-intel';
   if (tool.startsWith('solana_')) return 'mcp-solana';
   if (tool.startsWith('sim_')) return 'mcp-tx-simulator';
+  if (tool.startsWith('wallet_')) return 'client-side'; // Handled in browser
   return null;
 }
 
@@ -265,6 +269,27 @@ serve(async (req) => {
         "X-RateLimit-Remaining": "0",
         "X-RateLimit-Reset": String(Math.ceil(rateResult.resetIn / 1000)),
       },
+    });
+  }
+
+  // ─── Client-side wallet tools ───
+  if (server === 'client-side') {
+    const durationMs = Date.now() - startMs;
+    appendAudit({
+      id: auditId, timestamp: new Date().toISOString(),
+      server: 'wallet', tool, opType, permission, status: 'success',
+      durationMs, projectKey: project_id,
+      inputSummary: summarizeInput(input),
+    });
+    return new Response(JSON.stringify({
+      ok: true,
+      result: { _clientSide: true, tool, input },
+      _gateway: {
+        auditId, opType, permission, server: 'wallet', durationMs,
+        rateLimit: { remaining: rateResult.remaining, resetIn: rateResult.resetIn },
+      },
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
