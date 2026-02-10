@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.project-webhooks]
 verify_jwt = false
+
+[functions.trigger-event-hooks]
+verify_jwt = false

@@ -10,6 +10,7 @@ import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage, extractFileBlocksFromMessage } from '@/lib/patch-utils';
 import { streamChat, runCommandRemote, streamAgent, PermissionRequest } from '@/lib/api-client';
+import { triggerEventHooks, isDeployCommand, isErrorExit } from '@/lib/event-hooks';
 import { detectRuntime } from '@/lib/detect-runtime';
 import { RUNTIME_TEMPLATES } from '@/types/runner';
 import { toast } from '@/hooks/use-toast';
@@ -779,6 +780,26 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
               }
             : r
         ));
+
+        // CI/CD: Auto-trigger event hooks
+        if (result.exitCode === 0 && isDeployCommand(command)) {
+          triggerEventHooks({
+            projectId: project.id,
+            event: 'OnDeploy',
+            payload: { command, exitCode: result.exitCode, durationMs: result.durationMs, cwd: result.cwd },
+          }).then(res => {
+            if (res.hooks_triggered > 0) {
+              toast({ title: `🚀 Deploy hooks fired (${res.hooks_triggered})` });
+            }
+          }).catch(() => {});
+        }
+        if (isErrorExit(result.exitCode)) {
+          triggerEventHooks({
+            projectId: project.id,
+            event: 'OnError',
+            payload: { command, exitCode: result.exitCode, durationMs: result.durationMs },
+          }).catch(() => {});
+        }
       },
       onError: (error) => {
         setRuns(prev => prev.map(r =>
@@ -786,6 +807,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
             ? { ...r, status: 'error' as const, logs: r.logs + `\n⚠ Error: ${error}\n`, exitCode: 1 }
             : r
         ));
+        // Fire OnError hooks
+        triggerEventHooks({
+          projectId: project.id,
+          event: 'OnError',
+          payload: { command, error },
+        }).catch(() => {});
       },
       onRequiresApproval: (req) => {
         // Pause the run and show permission prompt
