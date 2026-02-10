@@ -25,7 +25,7 @@ export function IDELayout() {
   const {
     showChat, toggleChat, toggleOutput, showOutput, project, runCommand,
     openFile, files, theme, toggleTheme, sendMessage, selectedText,
-    agentRun, stopAgent, pauseAgent,
+    agentRun, stopAgent, pauseAgent, clearAgentRun,
     activeRightPanel, setActiveRightPanel,
     mcpServers, toggleMCPServer,
     hooks, toggleHook, addHook, removeHook,
@@ -261,6 +261,10 @@ export function IDELayout() {
                       if (file) {
                         openFile(file.id);
                       }
+                    }}
+                    onNewRun={() => {
+                      clearAgentRun();
+                      setActiveRightPanel('chat');
                     }}
                   />
                 )}

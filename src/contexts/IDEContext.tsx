@@ -94,6 +94,7 @@ interface IDEContextType {
   startAgent: (goal: string) => void;
   stopAgent: () => void;
   pauseAgent: () => void;
+  clearAgentRun: () => void;
   // Hooks
   hooks: Hook[];
   toggleHook: (id: string) => void;
@@ -1047,7 +1048,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       runnerSession, killRunningProcess,
       sendErrorsToChat,
       theme, toggleTheme,
-      agentRun, startAgent, stopAgent, pauseAgent,
+      agentRun, startAgent, stopAgent, pauseAgent, clearAgentRun: () => setAgentRun(null),
       hooks, toggleHook, addHook, removeHook,
       mcpServers, toggleMCPServer,
       activeRightPanel, setActiveRightPanel,

@@ -11,6 +11,7 @@ interface AgentTimelineProps {
   onStop: () => void;
   onPause: () => void;
   onOpenFile?: (path: string) => void;
+  onNewRun?: () => void;
 }
 
 const stepIcon: Record<AgentStepType, React.ReactNode> = {
@@ -71,16 +72,25 @@ function isWeb3MCP(detail?: string): boolean {
   return /^(evm_|contract_|solana_|sim_|wallet_)/.test(detail);
 }
 
-export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTimelineProps) {
+export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun }: AgentTimelineProps) {
   if (!agentRun) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-6">
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-3">
           <Brain className="h-8 w-8 mx-auto text-muted-foreground/30" />
           <p>No agent run active</p>
           <p className="text-xs text-muted-foreground/60">
             Start an autonomous run from the chat panel
           </p>
+          {onNewRun && (
+            <button
+              onClick={onNewRun}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
+            >
+              <Play className="h-3 w-3" />
+              New Agent Run
+            </button>
+          )}
         </div>
       </div>
     );
@@ -107,7 +117,7 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTi
             {agentRun.status}
           </span>
         </div>
-        {isActive && (
+        {isActive ? (
           <div className="flex items-center gap-1">
             <button
               onClick={onPause}
@@ -123,7 +133,15 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTi
               Stop
             </button>
           </div>
-        )}
+        ) : onNewRun ? (
+          <button
+            onClick={onNewRun}
+            className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-primary/10 text-primary rounded-sm hover:bg-primary/20 transition-colors"
+          >
+            <Play className="h-2.5 w-2.5" />
+            New Run
+          </button>
+        ) : null}
       </div>
 
       {/* Goal & Meta */}

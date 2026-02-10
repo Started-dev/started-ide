@@ -86,10 +86,10 @@ export function ChatPanel() {
       </div>
 
       {/* Conversation History Tabs */}
-      {conversations.length > 0 && (
-        <div className="flex items-center border-b border-border bg-muted/30 overflow-x-auto">
-          <div className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none">
-            {conversations.map(conv => (
+      <div className="flex items-center border-b border-border bg-muted/30 overflow-x-auto">
+        <div className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none">
+          {conversations.length > 0 ? (
+            conversations.map(conv => (
               <div
                 key={conv.id}
                 className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] cursor-pointer border-r border-border/50 shrink-0 max-w-[140px] transition-colors ${
@@ -111,17 +111,22 @@ export function ChatPanel() {
                   </button>
                 )}
               </div>
-            ))}
-          </div>
-          <button
-            onClick={newConversation}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors shrink-0"
-            title="New conversation"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+            ))
+          ) : (
+            <div className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] bg-card text-foreground border-b-2 border-b-primary border-r border-border/50 shrink-0">
+              <MessageSquare className="h-3 w-3 shrink-0" />
+              <span className="truncate">New Chat</span>
+            </div>
+          )}
         </div>
-      )}
+        <button
+          onClick={newConversation}
+          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors shrink-0"
+          title="New conversation"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-auto px-3 py-3 space-y-4">
