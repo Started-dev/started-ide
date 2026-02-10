@@ -1,74 +1,99 @@
 
 
-# Advanced AI System + MCP-Augmented Chat + OpenClaw Deploy Interface
+# OpenClaw (MoltBot) One-Click Deploy from Started
 
-## Important Clarification: Ollama + Claude Code
+## Overview
 
-Ollama is a tool for running AI models locally on physical hardware. It cannot be integrated into this project because:
-- Started runs on Lovable Cloud (edge functions in the cloud), which cannot host local GPU processes
-- "Free tokens" via Ollama still costs GPU hardware/electricity -- it shifts cost, doesn't eliminate it
-- Claude Code is a CLI tool, not an API you can embed
+Transform the OpenClaw panel from a simple "connect to existing instance" model into a full deployment wizard -- similar to how Emergent deploys MoltBot. Users will be able to install and deploy OpenClaw/MoltBot directly from within Started, with a step-by-step guided flow.
 
-**What we CAN do**: The project already has Lovable AI Gateway access (Gemini 3 Flash, Gemini 2.5 Pro, GPT-5, etc.) at no API key cost to users. We'll add **model selection** so users can pick the best model for their task, and enhance the AI pipeline to be significantly more powerful.
+## Current State
 
----
+The OpenClaw panel currently requires users to manually provide an existing instance URL and API key. There is no way to **provision** or **install** OpenClaw from Started.
 
 ## What We'll Build
 
-### 1. Model Selector in Chat
+### 1. New "Install" Tab in OpenClawPanel
 
-Add a dropdown in the chat input area letting users pick from available models:
-- google/gemini-3-flash-preview (default, fast)
-- google/gemini-2.5-pro (heavy reasoning)
-- google/gemini-3-pro-preview (next-gen)
-- openai/gpt-5 (powerful all-rounder)
-- openai/gpt-5-mini (balanced)
+Add a new `install` tab to the existing panel (alongside Status, Deploy, Tasks, Skills). This tab provides a 3-step wizard:
 
-The selected model is sent to the `started` edge function and forwarded to the gateway.
+**Step 1 -- Configure LLM Key**
+- Input field for the user's LLM API key (or use the project's existing AI gateway key)
+- Option to use Started's built-in Lovable AI gateway key (auto-populated)
+- Validation check before proceeding
 
-### 2. MCP-Augmented AI Chat and Agent
+**Step 2 -- Run Installation**
+- One-click "Install MoltBot" button
+- Calls a new edge function `install-openclaw` that:
+  - Generates a high-entropy slug (32+ bits) for the instance URL
+  - Runs the MoltBot install script via the `run-command` edge function
+  - Streams progress logs back to the UI in real-time
+- Progress bar with live log output (tail of install log)
+- Installation runs in the background; UI polls for completion
+- Auto-refreshes every 10 seconds to check install status
 
-**The big gap today**: MCP connections exist (GitHub, Slack, Notion, etc.) but the AI chat and agent never use them. We'll wire enabled MCP servers into the AI context pipeline.
+**Step 3 -- Finish and Connect**
+- Shows the generated instance URL and auto-generated API key
+- "Connect" button auto-fills the OpenClaw config (URL + key) and switches to the Status tab
+- Tutorial link displayed prominently: a configurable reference URL
+- Copy-to-clipboard for the instance URL
 
-Changes:
-- **`sendMessage` in IDEContext**: Before calling `streamChat`, gather enabled MCP servers and their available tools, inject a tools manifest into the system prompt context so the AI knows what tools are available
-- **`started` edge function**: Accept an optional `mcp_tools` field; append a "Available MCP Tools" section to the system prompt listing tool names and descriptions
-- **`agent-run` edge function**: Same treatment -- inject MCP tool availability into the agent's system prompt so it can request MCP tool calls as actions
-- **New action type in agent**: `mcp_call` -- when the agent wants to use an MCP tool, the client intercepts it, calls `callMCPTool`, and feeds the result back
+### 2. New Edge Function: `install-openclaw`
 
-### 3. Richer Chat Input (Attachments, Web Search, URL Fetch)
+A backend function that orchestrates the MoltBot installation:
 
-Expand the chat input area with new context chip types:
-- **@url** -- paste a URL, fetch its content via Firecrawl/Perplexity MCP, inject as context
-- **@web** -- trigger a web search query via Perplexity, inject results as context
-- **@image** -- attach an image (base64 encode for multimodal models like Gemini)
+```text
+POST /install-openclaw
+Body: { llm_key, project_id }
 
-New chips in ChatPanel:
-- `@url` button (enabled when Firecrawl is connected)
-- `@web` button (enabled when Perplexity is connected)
-- `@image` button (file picker, converts to base64)
+Flow:
+1. Generate random slug (crypto.randomUUID + extra entropy)
+2. Store install record in `openclaw_installations` table (project_id, slug, status: 'installing')
+3. Execute the install script via run-command:
+   NEW_LLM_KEY="<key>" nohup bash -c "$(curl -fsSL https://moltbot.emergent.to/install.sh)" > /tmp/moltbot_install.log 2>&1 &
+4. Return { install_id, slug, status: 'installing' }
 
-### 4. Verify File Explorer Integration
+GET /install-openclaw?install_id=<id>
+Flow:
+1. Check install status (poll log file via run-command: tail -10 /tmp/moltbot_install.log)
+2. Return { status, logs, instance_url (if complete) }
+```
 
-The current code ALREADY pushes AI-generated files to the Explorer via:
-- `autoApplyParsedPatches()` -- applies unified diffs, creates folders, persists to DB
-- `autoCreateFileBlocks()` -- creates files from ```lang filepath blocks
+### 3. Database Table: `openclaw_installations`
 
-However, there's a gap: the **agent's `onPatch`** callback applies patches but doesn't always open created files in the explorer visibly. We'll ensure:
-- New files from agent patches are opened in tabs and highlighted in the file tree
-- A toast notification shows "Created: /path/to/file.ts" for each new file
-- The agent's `onRunCommand` results are also checked for file creation patterns
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | auto-generated |
+| project_id | UUID | references projects(id) |
+| user_id | UUID | who initiated |
+| slug | text | high-entropy unique slug |
+| instance_url | text | generated URL |
+| status | text | installing, completed, failed |
+| logs | text | last captured log output |
+| created_at | timestamptz | default now() |
+| completed_at | timestamptz | null until done |
 
-### 5. OpenClaw Deployable Interface
+RLS: Only the user who created the installation can read/update it.
 
-Create a new panel `OpenClawPanel.tsx` accessible from the toolbar that provides:
-- **Connection Setup**: Configure OpenClaw instance URL + API key
-- **Status Dashboard**: Show OpenClaw status, installed skills, active tasks
-- **Deploy from Started**: One-click deployment of project files to an OpenClaw instance
-  - Package project files and push via OpenClaw API
-  - Show deployment progress and logs
-- **Task Management**: View/cancel/create OpenClaw autonomous tasks from within Started
-- **Skill Management**: Install/uninstall OpenClaw skills
+### 4. Updated OpenClawPanel UI
+
+The panel tabs become: **Install** | Status | Deploy | Tasks | Skills
+
+- If no installation exists for this project, the Install tab is shown by default with the wizard
+- If an installation exists and is complete, it auto-connects and defaults to the Status tab
+- The Install tab shows previous installation history if one exists
+
+The wizard UI uses a stepper component:
+- Step indicators (1, 2, 3) with active/completed/pending states
+- Each step has a card with instructions and action button
+- Live log viewer in Step 2 (scrollable monospace area, auto-scrolls to bottom)
+- Progress indicator (indeterminate during install, checkmark on complete)
+
+### 5. Security Considerations
+
+- Slug generation uses `crypto.getRandomValues()` with 32+ bytes of entropy to prevent guessable URLs
+- LLM keys are never stored in the database -- only passed to the install script at runtime
+- Install logs are truncated to last 50 lines to prevent storage bloat
+- The install edge function validates the user is authenticated and owns the project
 
 ---
 
@@ -76,84 +101,50 @@ Create a new panel `OpenClawPanel.tsx` accessible from the toolbar that provides
 
 ### Files Changed
 
-**Edge Functions:**
-- `supabase/functions/started/index.ts` -- Accept `model` and `mcp_tools` params; use selected model; inject MCP context into system prompt
-- `supabase/functions/agent-run/index.ts` -- Accept `mcp_tools` param; add `mcp_call` action type; inject MCP tool manifest into agent system prompt
+**New Files:**
+- `supabase/functions/install-openclaw/index.ts` -- Edge function for MoltBot installation orchestration
+- Database migration for `openclaw_installations` table
 
-**Frontend - AI Pipeline:**
-- `src/lib/api-client.ts` -- Add `model` param to `streamChat` and `streamAgent` options; add `mcpTools` param
-- `src/contexts/IDEContext.tsx`:
-  - `sendMessage`: Gather enabled MCP servers' tools, pass to API; add model selection state
-  - `startAgent`: Same MCP tool injection; handle new `mcp_call` action type from agent stream
-  - Add `selectedModel` / `setSelectedModel` to context
-  - Add toast notifications when agent creates new files
-  - Add `fetchUrlContent` and `webSearch` helpers that use MCP tools
+**Modified Files:**
+- `src/components/ide/OpenClawPanel.tsx` -- Add Install tab with 3-step wizard, log viewer, polling logic
+- `supabase/config.toml` -- Add `[functions.install-openclaw]` entry
 
-**Frontend - Chat UI:**
-- `src/components/ide/ChatPanel.tsx`:
-  - Add model selector dropdown above input
-  - Add @url, @web, @image chip buttons
-  - Add image file picker dialog
-  - Show MCP tool usage inline in chat
-
-**Frontend - New Components:**
-- `src/components/ide/OpenClawPanel.tsx` -- Full OpenClaw management panel with tabs for Status, Deploy, Tasks, Skills
-- `src/components/ide/ModelSelector.tsx` -- Reusable model picker dropdown
-
-**Types:**
-- `src/types/ide.ts` -- Add 'url', 'web', 'image' to ContextChip type union
-- `src/types/agent.ts` -- Add 'mcp_call' to AgentStepType
-
-**IDE Layout:**
-- `src/components/ide/IDELayout.tsx` -- Add OpenClaw button to toolbar (Claw/Terminal icon)
-
-### MCP Integration Flow
+### Install Wizard Flow
 
 ```text
-User sends message
-      |
-      v
-Gather enabled MCP servers + their tool lists
-      |
-      v
-Inject "Available Tools" manifest into context
-      |
-      v
-AI sees available tools, can reference them in response
-      |
-      v
-(Agent mode) AI returns { action: "mcp_call", tool: "github_create_issue", input: {...} }
-      |
-      v
-Client calls callMCPTool() with stored tokens
-      |
-      v
-Result fed back to agent conversation history
-      |
-      v
-Agent continues loop with MCP result context
+User clicks "Install" tab
+    |
+    v
+Step 1: Enter LLM Key (or use Started gateway)
+    |  [Next]
+    v
+Step 2: Click "Install MoltBot"
+    |  -> POST /install-openclaw { llm_key, project_id }
+    |  -> Returns install_id
+    |  -> Poll GET /install-openclaw?install_id every 10s
+    |  -> Show live logs
+    |  -> Wait for status === 'completed'
+    v
+Step 3: Installation complete!
+    |  -> Show instance URL + API key
+    |  -> "Connect" button auto-fills config
+    |  -> Tutorial link displayed
+    v
+Auto-switch to Status tab (connected)
 ```
 
-### Model Selection Flow
+### Slug Generation (Edge Function)
 
-- Default: `google/gemini-3-flash-preview`
-- State stored in IDEContext as `selectedModel`
-- Passed through `streamChat({ model })` to edge function
-- Edge function forwards to gateway with selected model
-
-### OpenClaw Deploy Flow
-
-1. User opens OpenClaw panel, configures instance URL + API key (stored in sessionStorage)
-2. Clicks "Deploy Project"
-3. Frontend packages all project files as JSON
-4. Calls `mcp-openclaw` edge function with a new `openclaw_deploy` tool
-5. OpenClaw receives files and deploys them
-6. Progress/status shown in the panel
+```typescript
+const bytes = new Uint8Array(16); // 128 bits of entropy
+crypto.getRandomValues(bytes);
+const slug = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+// Result: 32-char hex string like "a3f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6"
+```
 
 ### No Breaking Changes
 
-- Model defaults to current `gemini-3-flash-preview` if not specified
-- MCP tools are only injected if servers are enabled and have tokens configured
-- All new chat chips are optional additions
-- OpenClaw panel is a new opt-in feature
+- Existing "connect to external instance" flow remains unchanged
+- The Install tab is additive -- users who already have an OpenClaw instance can skip it entirely
+- All existing tabs (Status, Deploy, Tasks, Skills) continue to work as before
 
