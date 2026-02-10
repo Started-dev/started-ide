@@ -10,6 +10,7 @@ import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractC
 import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectPersistence } from '@/hooks/use-project-persistence';
+import { useConversationPersistence } from '@/hooks/use-conversation-persistence';
 import type { ProjectInfo } from '@/hooks/use-project-persistence';
 import { useFileSnapshots } from '@/hooks/use-file-snapshots';
 import type { Snapshot } from '@/hooks/use-file-snapshots';
@@ -142,6 +143,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const { projectId, loading: persistenceLoading, initialFiles, projects, saveFile, deleteFileFromDB, saveAllFiles, switchProject: switchProjectRaw, createProject: createProjectRaw, renameProject: renameProjectRaw, deleteProject: deleteProjectRaw } = useProjectPersistence(user);
   const { snapshots, loading: snapshotsLoading, loadSnapshots, createSnapshot: createSnapshotRaw, getSnapshotFiles } = useFileSnapshots(projectId);
   const collab = useCollaboration(projectId, user?.id || null, user?.email || null);
+  const convPersistence = useConversationPersistence(projectId, user);
   const isProjectOwner = !!user && projects.some(p => p.id === projectId);
 
   const [project, setProject] = useState<Project>({ id: 'demo-1', name: 'demo-project', runtimeType: 'node', files: [] });
@@ -172,7 +174,10 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
   const agentAbortRef = useRef(false);
 
-  // Conversation history state
+  // Conversation history state (DB-backed)
+  const [activeConversationId, setActiveConversationId] = useState<string>('');
+  const convInitializedRef = useRef<string | null>(null);
+
   const makeNewConversation = useCallback((pId: string): Conversation => ({
     id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     title: 'New Chat',
@@ -181,32 +186,40 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     projectId: pId,
   }), []);
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string>('');
+  const deriveTitle = (msgs: ChatMessage[]): string => {
+    const firstUser = msgs.find(m => m.role === 'user');
+    if (!firstUser) return 'New Chat';
+    return firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '…' : '');
+  };
 
-  // Initialize first conversation when project loads
+  // Initialize conversations when project loads and DB conversations are ready
   useEffect(() => {
-    if (!projectId) return;
-    setConversations(prev => {
-      const projectConvs = prev.filter(c => c.projectId === projectId);
-      if (projectConvs.length > 0) {
-        // Switch to the latest conversation for this project
-        const latest = projectConvs[projectConvs.length - 1];
-        setActiveConversationId(latest.id);
-        setChatMessages(latest.messages);
-        return prev;
-      }
-      // Create a fresh conversation for this project
+    if (!projectId || convPersistence.loading) return;
+    if (convInitializedRef.current === projectId) return;
+    convInitializedRef.current = projectId;
+
+    const projectConvs = convPersistence.conversations.filter(c => c.projectId === projectId);
+    if (projectConvs.length > 0) {
+      const latest = projectConvs[projectConvs.length - 1];
+      setActiveConversationId(latest.id);
+      setChatMessages(latest.messages);
+    } else {
+      // Create a fresh conversation
       const newConv = makeNewConversation(projectId);
       setActiveConversationId(newConv.id);
       setChatMessages(newConv.messages);
-      return [...prev, newConv];
-    });
+      convPersistence.createConversation(newConv);
+    }
     setAgentRun(null);
     setActiveRightPanel('chat');
-  }, [projectId, makeNewConversation]);
+  }, [projectId, convPersistence.loading, convPersistence.conversations, makeNewConversation]);
 
-  // Sync chatMessages back to the active conversation
+  // Reset initialized ref when project changes
+  useEffect(() => {
+    convInitializedRef.current = null;
+  }, [projectId]);
+
+  // Sync chatMessages to DB (debounced)
   const prevMessagesRef = useRef(chatMessages);
   useEffect(() => {
     if (!activeConversationId || chatMessages === prevMessagesRef.current) {
@@ -214,73 +227,56 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     prevMessagesRef.current = chatMessages;
-    setConversations(prev => prev.map(c =>
-      c.id === activeConversationId
-        ? { ...c, messages: chatMessages, title: deriveTitle(chatMessages) }
-        : c
-    ));
-  }, [chatMessages, activeConversationId]);
-
-  const deriveTitle = (msgs: ChatMessage[]): string => {
-    const firstUser = msgs.find(m => m.role === 'user');
-    if (!firstUser) return 'New Chat';
-    return firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '…' : '');
-  };
+    const title = deriveTitle(chatMessages);
+    convPersistence.saveConversation(activeConversationId, chatMessages, title);
+  }, [chatMessages, activeConversationId, convPersistence.saveConversation]);
 
   const switchConversation = useCallback((conversationId: string) => {
-    // Save current messages
-    setConversations(prev => prev.map(c =>
-      c.id === activeConversationId
-        ? { ...c, messages: chatMessages, title: deriveTitle(chatMessages) }
-        : c
-    ));
-    const target = conversations.find(c => c.id === conversationId);
+    // Save current before switching
+    if (activeConversationId) {
+      convPersistence.saveConversation(activeConversationId, chatMessages, deriveTitle(chatMessages));
+    }
+    const target = convPersistence.conversations.find(c => c.id === conversationId);
     if (target) {
       setChatMessages(target.messages);
       setActiveConversationId(conversationId);
       setAgentRun(null);
       setActiveRightPanel('chat');
     }
-  }, [activeConversationId, chatMessages, conversations]);
+  }, [activeConversationId, chatMessages, convPersistence]);
 
   const newConversation = useCallback(() => {
     if (!projectId) return;
     // Save current
-    setConversations(prev => {
-      const updated = prev.map(c =>
-        c.id === activeConversationId
-          ? { ...c, messages: chatMessages, title: deriveTitle(chatMessages) }
-          : c
-      );
-      const newConv = makeNewConversation(projectId);
-      setActiveConversationId(newConv.id);
-      setChatMessages(newConv.messages);
-      setAgentRun(null);
-      setActiveRightPanel('chat');
-      return [...updated, newConv];
-    });
-  }, [projectId, activeConversationId, chatMessages, makeNewConversation]);
+    if (activeConversationId) {
+      convPersistence.saveConversation(activeConversationId, chatMessages, deriveTitle(chatMessages));
+    }
+    const newConv = makeNewConversation(projectId);
+    setActiveConversationId(newConv.id);
+    setChatMessages(newConv.messages);
+    setAgentRun(null);
+    setActiveRightPanel('chat');
+    convPersistence.createConversation(newConv);
+  }, [projectId, activeConversationId, chatMessages, makeNewConversation, convPersistence]);
 
   const deleteConversation = useCallback((conversationId: string) => {
     if (!projectId) return;
-    setConversations(prev => {
-      const remaining = prev.filter(c => c.id !== conversationId);
-      const projectConvs = remaining.filter(c => c.projectId === projectId);
-      if (conversationId === activeConversationId) {
-        if (projectConvs.length > 0) {
-          const latest = projectConvs[projectConvs.length - 1];
-          setActiveConversationId(latest.id);
-          setChatMessages(latest.messages);
-        } else {
-          const newConv = makeNewConversation(projectId);
-          setActiveConversationId(newConv.id);
-          setChatMessages(newConv.messages);
-          return [...remaining, newConv];
-        }
+    convPersistence.deleteConversationFromDB(conversationId);
+    
+    if (conversationId === activeConversationId) {
+      const remaining = convPersistence.conversations.filter(c => c.id !== conversationId && c.projectId === projectId);
+      if (remaining.length > 0) {
+        const latest = remaining[remaining.length - 1];
+        setActiveConversationId(latest.id);
+        setChatMessages(latest.messages);
+      } else {
+        const newConv = makeNewConversation(projectId);
+        setActiveConversationId(newConv.id);
+        setChatMessages(newConv.messages);
+        convPersistence.createConversation(newConv);
       }
-      return remaining;
-    });
-  }, [projectId, activeConversationId, makeNewConversation]);
+    }
+  }, [projectId, activeConversationId, convPersistence, makeNewConversation]);
 
   // Hooks state
   const [hooks, setHooks] = useState<Hook[]>(DEFAULT_HOOKS);
@@ -958,7 +954,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       mcpServers, toggleMCPServer,
       activeRightPanel, setActiveRightPanel,
       snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
-      conversations: conversations.filter(c => c.projectId === projectId),
+      conversations: convPersistence.conversations.filter(c => c.projectId === projectId),
       activeConversationId, switchConversation, newConversation, deleteConversation,
       projects, switchProject, createProject, renameProject: renameProjectAction, deleteProject: deleteProjectAction,
       collaborators: collab.collaborators,
