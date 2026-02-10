@@ -1,9 +1,10 @@
 import { 
   Brain, Wrench, FileCode, Play, CheckCircle, XCircle, 
   Loader2, SkipForward, Square, Clock, Zap, AlertTriangle,
-  FilePlus2, FileEdit
+  FilePlus2, FileEdit, Eye, FlaskConical, Pencil, Link
 } from 'lucide-react';
 import { AgentRun, AgentStep, AgentStepType } from '@/types/agent';
+import { getWeb3OpType, type Web3OpType } from '@/lib/tool-executor';
 
 interface AgentTimelineProps {
   agentRun: AgentRun | null;
@@ -29,6 +30,46 @@ const statusColors: Record<AgentStep['status'], string> = {
   failed: 'text-ide-error',
   skipped: 'text-muted-foreground/50',
 };
+
+// ─── Web3 Operation Type Badge ───
+
+const web3OpConfig: Record<Web3OpType, { label: string; icon: React.ReactNode; bg: string; text: string }> = {
+  READ: {
+    label: 'READ',
+    icon: <Eye className="h-2.5 w-2.5" />,
+    bg: 'bg-emerald-500/15',
+    text: 'text-emerald-400',
+  },
+  SIMULATE: {
+    label: 'SIM',
+    icon: <FlaskConical className="h-2.5 w-2.5" />,
+    bg: 'bg-sky-500/15',
+    text: 'text-sky-400',
+  },
+  WRITE: {
+    label: 'WRITE',
+    icon: <Pencil className="h-2.5 w-2.5" />,
+    bg: 'bg-amber-500/15',
+    text: 'text-amber-400',
+  },
+};
+
+function Web3OpBadge({ toolName }: { toolName: string }) {
+  const opType = getWeb3OpType(toolName);
+  if (!opType) return null;
+  const cfg = web3OpConfig[opType];
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider ${cfg.bg} ${cfg.text}`}>
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  );
+}
+
+function isWeb3MCP(detail?: string): boolean {
+  if (!detail) return false;
+  return /^(evm_|contract_|solana_|sim_)/.test(detail);
+}
 
 export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTimelineProps) {
   if (!agentRun) {
@@ -134,6 +175,17 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile }: AgentTi
                     <span className={`text-xs font-medium ${statusColors[step.status]}`}>
                       {step.label}
                     </span>
+                    {/* Web3 op-type badge */}
+                    {step.type === 'tool_call' && step.detail && isWeb3MCP(step.detail) && (
+                      <Web3OpBadge toolName={step.detail.split('(')[0].trim()} />
+                    )}
+                    {/* Web3 chain indicator */}
+                    {step.type === 'tool_call' && step.detail && isWeb3MCP(step.detail) && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground">
+                        <Link className="h-2 w-2" />
+                        Web3
+                      </span>
+                    )}
                     {step.durationMs !== undefined && (
                       <span className="text-[10px] text-muted-foreground">
                         {step.durationMs < 1000 ? `${step.durationMs}ms` : `${(step.durationMs / 1000).toFixed(1)}s`}

@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.mcp-tx-simulator]
 verify_jwt = false
+
+[functions.mcp-web3-gateway]
+verify_jwt = false

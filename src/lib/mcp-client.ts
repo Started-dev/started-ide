@@ -62,6 +62,25 @@ export interface MCPToolCallResult {
 export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallResult> {
   const body: Record<string, unknown> = { tool: req.tool, input: req.input };
 
+  // ─── Web3 Gateway: route Web3 tools through centralized gateway ───
+  const isWeb3Tool = /^(evm_|contract_|solana_|sim_)/.test(req.tool);
+  if (isWeb3Tool || req.serverId === 'mcp-web3-gateway') {
+    const gwBody: Record<string, unknown> = {
+      tool: req.tool,
+      input: req.input,
+      rpc_url: req.evmRpcUrl || req.solanaRpcUrl,
+      etherscan_key: req.etherscanKey,
+      chain: req.etherscanChain || 'ethereum',
+      tenderly_key: req.tenderlyKey,
+      tenderly_account: req.tenderlyAccount,
+      tenderly_project: req.tenderlyProject,
+    };
+    const { data, error } = await supabase.functions.invoke('mcp-web3-gateway', { body: gwBody });
+    if (error) return { ok: false, error: error.message };
+    return data as MCPToolCallResult;
+  }
+
+  // ─── Standard MCP routing ───
   switch (req.serverId) {
     case 'mcp-github': body.github_token = req.githubToken; break;
     case 'mcp-vercel': body.vercel_token = req.vercelToken; break;
@@ -116,7 +135,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       body.trello_token = req.trelloToken;
       break;
     case 'mcp-sendgrid': body.sendgrid_api_key = req.sendgridApiKey; break;
-    // Web3 MCP servers
+    // Web3 MCP servers (direct bypass — prefer gateway above)
     case 'mcp-evm-rpc': body.rpc_url = req.evmRpcUrl; break;
     case 'mcp-contract-intel':
       body.etherscan_key = req.etherscanKey;
