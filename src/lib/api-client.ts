@@ -175,3 +175,81 @@ export async function runCommandRemote({ command, cwd, timeoutS, onLog, onDone, 
     }
   }
 }
+
+// ─── Agent Streaming ───
+
+export interface AgentStepEvent {
+  id: string;
+  type: string;
+  label: string;
+  detail?: string;
+  status: string;
+}
+
+interface StreamAgentOptions {
+  goal: string;
+  files: Array<{ path: string; content: string }>;
+  maxIterations?: number;
+  onStep: (step: AgentStepEvent, iteration: number) => void;
+  onPatch: (diff: string, summary: string) => void;
+  onRunCommand: (command: string, summary: string) => void;
+  onDone: (reason: string) => void;
+  onError: (reason: string) => void;
+  signal?: AbortSignal;
+}
+
+export async function streamAgent({
+  goal, files, maxIterations, onStep, onPatch, onRunCommand, onDone, onError, signal,
+}: StreamAgentOptions) {
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+    },
+    body: JSON.stringify({ goal, files, maxIterations }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: 'Unknown error' }));
+    onError(data.error || `HTTP ${resp.status}`);
+    return;
+  }
+
+  if (!resp.body) { onError('No response body'); return; }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let idx: number;
+    while ((idx = buffer.indexOf('\n\n')) !== -1) {
+      const chunk = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+
+      for (const line of chunk.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const parsed = JSON.parse(line.slice(6));
+          if (parsed.type === 'step') {
+            onStep(parsed.step, parsed.iteration);
+          } else if (parsed.type === 'patch') {
+            onPatch(parsed.diff, parsed.summary);
+          } else if (parsed.type === 'run_command') {
+            onRunCommand(parsed.command, parsed.summary);
+          } else if (parsed.type === 'agent_done') {
+            onDone(parsed.reason);
+          } else if (parsed.type === 'agent_error') {
+            onError(parsed.reason);
+          }
+        } catch { /* ignore partial */ }
+      }
+    }
+  }
+}

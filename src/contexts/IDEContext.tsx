@@ -7,7 +7,7 @@ import { CLAUDE_SYSTEM_PROMPT } from '@/lib/claude-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
-import { streamChat, runCommandRemote } from '@/lib/api-client';
+import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
 
 const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
 
@@ -450,6 +450,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
   const startAgent = useCallback((goal: string) => {
     agentAbortRef.current = false;
+    const abortController = new AbortController();
     const run: AgentRun = {
       id: `agent-${Date.now()}`,
       goal,
@@ -462,64 +463,86 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setAgentRun(run);
     setActiveRightPanel('agent');
 
-    // Simulate agent loop
     const addStep = (step: AgentStep) => {
       setAgentRun(prev => prev ? { ...prev, steps: [...prev.steps, step] } : null);
     };
 
-    const runLoop = async () => {
-      const steps: Array<{ type: AgentStep['type']; label: string; detail?: string; delayMs: number }> = [
-        { type: 'think', label: 'Analyzing goal', detail: goal, delayMs: 800 },
-        { type: 'tool_call', label: 'Reading project files', detail: 'list_files(src/**/*)', delayMs: 600 },
-        { type: 'tool_call', label: 'Reading main.ts', detail: 'read_file(/src/main.ts)', delayMs: 400 },
-        { type: 'think', label: 'Planning changes', detail: 'Identifying required modifications', delayMs: 700 },
-        { type: 'patch', label: 'Generating patch', detail: 'src/utils.ts — adding validation', delayMs: 900 },
-        { type: 'run', label: 'Running tests', detail: 'npm test', delayMs: 1500 },
-        { type: 'evaluate', label: 'Evaluating results', detail: 'All tests passed', delayMs: 500 },
-        { type: 'done', label: 'Goal completed', detail: 'All changes applied and verified', delayMs: 300 },
-      ];
+    // Prepare project files for context
+    const projectFiles = files
+      .filter(f => !f.isFolder)
+      .map(f => ({ path: f.path, content: f.content }));
 
-      for (let i = 0; i < steps.length; i++) {
-        if (agentAbortRef.current) {
-          addStep({
-            id: `step-${Date.now()}`, type: 'error', label: 'Cancelled by user',
-            status: 'failed', startedAt: new Date(), completedAt: new Date(),
-          });
-          setAgentRun(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date() } : null);
-          return;
-        }
-
-        const s = steps[i];
-        const stepId = `step-${Date.now()}-${i}`;
-        addStep({ id: stepId, type: s.type, label: s.label, detail: s.detail, status: 'running', startedAt: new Date() });
-        setAgentRun(prev => prev ? { ...prev, iteration: Math.floor(i / 3) + 1 } : null);
-
-        await new Promise(r => setTimeout(r, s.delayMs));
-
-        setAgentRun(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            steps: prev.steps.map(st =>
-              st.id === stepId ? { ...st, status: 'completed' as const, completedAt: new Date(), durationMs: s.delayMs } : st
-            ),
-          };
+    streamAgent({
+      goal,
+      files: projectFiles,
+      maxIterations: 10,
+      signal: abortController.signal,
+      onStep: (step, iteration) => {
+        addStep({
+          id: step.id,
+          type: step.type as AgentStep['type'],
+          label: step.label,
+          detail: step.detail,
+          status: step.status as AgentStep['status'],
+          startedAt: new Date(),
+          completedAt: step.status === 'completed' || step.status === 'failed' ? new Date() : undefined,
         });
-      }
+        setAgentRun(prev => prev ? { ...prev, iteration } : null);
+      },
+      onPatch: (diff, summary) => {
+        // Create a pending patch for the user to review
+        const parsed = parseUnifiedDiff(diff);
+        if (parsed.length > 0) {
+          const patchPreview: PatchPreview = { id: `patch-${Date.now()}`, patches: parsed, raw: diff, status: 'preview' };
+          setPendingPatches(prev => [...prev, patchPreview]);
+        }
+      },
+      onRunCommand: (command, summary) => {
+        // Auto-run the command in the terminal
+        runCommand(command);
+      },
+      onDone: (reason) => {
+        addStep({
+          id: `step-done-${Date.now()}`,
+          type: 'done',
+          label: 'Goal completed',
+          detail: reason,
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+        });
+        setAgentRun(prev => prev ? { ...prev, status: 'completed', completedAt: new Date() } : null);
+      },
+      onError: (reason) => {
+        addStep({
+          id: `step-err-${Date.now()}`,
+          type: 'error',
+          label: 'Agent error',
+          detail: reason,
+          status: 'failed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+        });
+        setAgentRun(prev => prev ? { ...prev, status: 'failed', completedAt: new Date() } : null);
+      },
+    });
 
-      setAgentRun(prev => prev ? { ...prev, status: 'completed', completedAt: new Date() } : null);
-    };
-
-    runLoop();
-  }, []);
+    // Store abort controller for stop/pause
+    (window as any).__agentAbortController = abortController;
+  }, [files, runCommand]);
 
   const stopAgent = useCallback(() => {
     agentAbortRef.current = true;
+    const ctrl = (window as any).__agentAbortController as AbortController | undefined;
+    if (ctrl) ctrl.abort();
+    setAgentRun(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date() } : null);
   }, []);
 
   const pauseAgent = useCallback(() => {
-    setAgentRun(prev => prev ? { ...prev, status: 'paused' } : null);
     agentAbortRef.current = true;
+    const ctrl = (window as any).__agentAbortController as AbortController | undefined;
+    if (ctrl) ctrl.abort();
+    setAgentRun(prev => prev ? { ...prev, status: 'paused' } : null);
   }, []);
 
   // ─── Hooks ───

@@ -1,1 +1,13 @@
 project_id = "gihirezmjyoxxhllwitr"
+
+[functions.claude]
+verify_jwt = false
+
+[functions.apply-patch]
+verify_jwt = false
+
+[functions.run-command]
+verify_jwt = false
+
+[functions.agent-run]
+verify_jwt = false
