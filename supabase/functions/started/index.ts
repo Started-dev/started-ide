@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const SYSTEM_PROMPT = `You are "Started Code (Web IDE)" — an agentic coding assistant operating inside a project workspace.
@@ -54,22 +55,79 @@ You are done when:
 - Changes are consistent with repo style
 - Verification commands pass OR you clearly explain what failed and what to do next`;
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+// ─── Quota check helper ───
+async function checkQuota(userId: string, serviceClient: ReturnType<typeof createClient>): Promise<{ allowed: boolean; reason?: string }> {
+  try {
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+    const { data: ledger } = await serviceClient
+      .from("api_usage_ledger")
+      .select("model_tokens, plan_key")
+      .eq("owner_id", userId)
+      .gte("period_start", periodStart)
+      .lte("period_end", periodEnd)
+      .maybeSingle();
+
+    if (!ledger) return { allowed: true }; // No ledger = no tracking yet
+
+    const { data: plan } = await serviceClient
+      .from("billing_plans")
+      .select("included_tokens")
+      .eq("key", ledger.plan_key)
+      .maybeSingle();
+
+    if (plan && ledger.model_tokens >= plan.included_tokens) {
+      return { allowed: false, reason: "Token quota exceeded for this billing period. Please upgrade your plan." };
+    }
+    return { allowed: true };
+  } catch {
+    return { allowed: true }; // Fail open on quota check errors
   }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, context } = await req.json();
+    const { messages, context, project_id } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Build messages array with system prompt and context
+    // ─── Auth check ───
+    const authHeader = req.headers.get("Authorization");
+    let userId: string | null = null;
+    if (authHeader) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
+    }
+
+    // ─── Quota check ───
+    if (userId) {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      const quota = await checkQuota(userId, serviceClient);
+      if (!quota.allowed) {
+        return new Response(
+          JSON.stringify({ error: quota.reason }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ─── Build messages ───
     const systemMessages = [
       { role: "system", content: SYSTEM_PROMPT },
     ];
 
-    // Inject project context if provided
     if (context && typeof context === "string" && context.trim()) {
       systemMessages.push({
         role: "system",
@@ -114,6 +172,28 @@ serve(async (req) => {
         JSON.stringify({ error: "AI gateway error" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // ─── Increment token usage (best effort, async) ───
+    if (userId) {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      // Estimate tokens from message lengths (rough: 1 token ≈ 4 chars)
+      const totalChars = allMessages.reduce((sum: number, m: { content: string }) => sum + (m.content?.length || 0), 0);
+      const estimatedTokens = Math.ceil(totalChars / 4);
+
+      const now = new Date();
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+      serviceClient.rpc("increment_usage", {
+        _owner_id: userId,
+        _period_start: periodStart,
+        _period_end: periodEnd,
+        _tokens: estimatedTokens,
+      }).then(() => {}).catch(() => {});
     }
 
     return new Response(response.body, {

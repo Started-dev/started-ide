@@ -47,6 +47,103 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_runs: {
+        Row: {
+          created_at: string
+          current_step: number
+          error_message: string | null
+          goal: string
+          id: string
+          max_steps: number
+          preset_key: string | null
+          project_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_step?: number
+          error_message?: string | null
+          goal: string
+          id?: string
+          max_steps?: number
+          preset_key?: string | null
+          project_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_step?: number
+          error_message?: string | null
+          goal?: string
+          id?: string
+          max_steps?: number
+          preset_key?: string | null
+          project_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_steps: {
+        Row: {
+          agent_run_id: string
+          created_at: string
+          duration_ms: number | null
+          id: string
+          input: Json | null
+          kind: string
+          output: Json | null
+          status: string
+          step_index: number
+          title: string
+        }
+        Insert: {
+          agent_run_id: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          input?: Json | null
+          kind?: string
+          output?: Json | null
+          status?: string
+          step_index?: number
+          title?: string
+        }
+        Update: {
+          agent_run_id?: string
+          created_at?: string
+          duration_ms?: number | null
+          id?: string
+          input?: Json | null
+          kind?: string
+          output?: Json | null
+          status?: string
+          step_index?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_steps_agent_run_id_fkey"
+            columns: ["agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "agent_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_usage_ledger: {
         Row: {
           id: string
@@ -576,6 +673,47 @@ export type Database = {
             columns: ["server_id"]
             isOneToOne: false
             referencedRelation: "mcp_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_permissions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effect: string
+          id: string
+          project_id: string
+          reason: string | null
+          rule_type: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effect?: string
+          id?: string
+          project_id: string
+          reason?: string | null
+          rule_type?: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effect?: string
+          id?: string
+          project_id?: string
+          reason?: string | null
+          rule_type?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_permissions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
