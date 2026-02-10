@@ -65,6 +65,23 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://api.slack.com/apps',
     generateLabel: 'Create a Slack app and get Bot Token',
   },
+  'mcp-notion': {
+    storageKey: 'notion_integration_token',
+    label: 'Notion Integration Token',
+    placeholder: 'ntn_xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://www.notion.so/my-integrations',
+    generateLabel: 'Create an integration on Notion',
+  },
+  'mcp-n8n': {
+    storageKey: 'n8n_api_key',
+    label: 'n8n API Key',
+    placeholder: 'n8n_api_xxxxxxxxxxxx',
+    generateUrl: 'https://docs.n8n.io/api/authentication/',
+    generateLabel: 'Generate an API key in n8n Settings',
+    secondaryKey: 'n8n_base_url',
+    secondaryLabel: 'n8n Instance URL',
+    secondaryPlaceholder: 'https://your-instance.app.n8n.cloud',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -130,6 +147,9 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         awsRegion: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_region') || 'us-east-1') : undefined,
         stripeToken: serverId === 'mcp-stripe' ? token : undefined,
         slackToken: serverId === 'mcp-slack' ? token : undefined,
+        notionToken: serverId === 'mcp-notion' ? token : undefined,
+        n8nApiKey: serverId === 'mcp-n8n' ? token : undefined,
+        n8nBaseUrl: serverId === 'mcp-n8n' ? (sessionStorage.getItem('n8n_base_url') || tokenInputs[`${serverId}_secondary`]) : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
