@@ -126,14 +126,15 @@ interface RunCommandOptions {
   cwd?: string;
   timeoutS?: number;
   projectId?: string;
+  files?: Array<{ path: string; content: string }>;
   onLog: (line: string) => void;
-  onDone: (result: { exitCode: number; cwd: string; durationMs: number }) => void;
+  onDone: (result: { exitCode: number; cwd: string; durationMs: number; changedFiles?: Array<{ path: string; content: string }> }) => void;
   onError: (error: string) => void;
   onRequiresApproval?: (req: PermissionRequest) => void;
   signal?: AbortSignal;
 }
 
-export async function runCommandRemote({ command, cwd, timeoutS, projectId, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
+export async function runCommandRemote({ command, cwd, timeoutS, projectId, files, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
   const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/run-command`, {
     method: 'POST',
@@ -141,7 +142,7 @@ export async function runCommandRemote({ command, cwd, timeoutS, projectId, onLo
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId }),
+    body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId, files }),
     signal,
   });
 
@@ -163,7 +164,7 @@ export async function runCommandRemote({ command, cwd, timeoutS, projectId, onLo
     }
     if (data.stderr) onLog(data.stderr);
     if (data.stdout) onLog(data.stdout);
-    onDone({ exitCode: data.exitCode ?? (data.ok ? 0 : 1), cwd: data.cwd || cwd || '/workspace', durationMs: data.durationMs ?? 0 });
+    onDone({ exitCode: data.exitCode ?? (data.ok ? 0 : 1), cwd: data.cwd || cwd || '/workspace', durationMs: data.durationMs ?? 0, changedFiles: data.changedFiles });
     return;
   }
 

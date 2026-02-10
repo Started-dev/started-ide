@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, FolderOpen, Plus, Trash2, Pencil, Check, AlertTriangle } from 'lucide-react';
+import { X, FolderOpen, Plus, Trash2, Pencil, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +18,7 @@ interface ProjectSwitcherProps {
   projects: ProjectInfo[];
   currentProjectId: string | null;
   onSwitch: (projectId: string) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => Promise<void> | void;
   onRename: (projectId: string, name: string) => void;
   onDelete: (projectId: string) => void;
   onClose: () => void;
@@ -34,15 +34,21 @@ export function ProjectSwitcher({
   onClose,
 }: ProjectSwitcherProps) {
   const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ProjectInfo | null>(null);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const name = newName.trim();
-    if (!name) return;
-    onCreate(name);
-    setNewName('');
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      await onCreate(name);
+      setNewName('');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const startRename = (p: ProjectInfo) => {
@@ -104,11 +110,11 @@ export function ProjectSwitcher({
               <Button
                 size="sm"
                 onClick={handleCreate}
-                disabled={!newName.trim()}
+                disabled={!newName.trim() || creating}
                 className="h-7 text-xs px-2.5 gap-1"
               >
-                <Plus className="h-3 w-3" />
-                Create
+                {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                {creating ? 'Creating…' : 'Create'}
               </Button>
             </div>
           </div>

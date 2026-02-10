@@ -226,6 +226,11 @@ export function TerminalPanel() {
         </div>
 
         <div className="flex items-center gap-1 px-2 shrink-0">
+          {/* Runner status badge */}
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-sm bg-muted text-muted-foreground font-mono">
+            <span className="h-1.5 w-1.5 rounded-full bg-ide-success shrink-0" />
+            Edge Runner
+          </span>
           {hasErrors && activeTab === 'output' && (
             <button
               onClick={sendErrorsToChat}

@@ -23,6 +23,25 @@ const DENIED_PATTERNS = [
   /wget\s.*\|\s*(bash|sh)/,
 ];
 
+// ─── Feature detection: can we use Deno.Command? ───
+let hasDenoCommand = false;
+try {
+  hasDenoCommand = typeof Deno.Command === "function";
+} catch {
+  hasDenoCommand = false;
+}
+
+// ─── Commands that can be executed via Deno.Command ───
+const SUBPROCESS_COMMANDS = new Set([
+  "node", "npm", "npx", "deno", "python", "python3", "pip", "pip3",
+  "tsc", "bun", "bunx", "go", "cargo", "rustc",
+  "gcc", "g++", "javac", "java", "ruby", "gem", "bundle",
+  "php", "composer", "dart", "swift", "swiftc", "kotlinc",
+  "Rscript", "solc", "cat", "ls", "find", "grep", "head", "tail",
+  "wc", "sort", "uniq", "cut", "tr", "sed", "awk", "mkdir", "touch",
+  "cp", "mv", "rm", "diff", "tree",
+]);
+
 // ─── Auth helper ───
 async function getUser(req: Request) {
   const authHeader = req.headers.get("Authorization");
@@ -185,15 +204,181 @@ function executePythonLike(code: string): { stdout: string; stderr: string; exit
   }
 }
 
+// ─── Subprocess execution via Deno.Command ───
+async function executeSubprocess(
+  command: string,
+  cwd: string,
+  timeoutS: number,
+  files?: Array<{ path: string; content: string }>
+): Promise<{ stdout: string; stderr: string; exitCode: number; cwd: string; changedFiles?: Array<{ path: string; content: string }> }> {
+  // Create a temp workspace if files are provided
+  let workDir = cwd;
+  let tempDir: string | null = null;
+
+  if (files && files.length > 0) {
+    tempDir = await Deno.makeTempDir({ prefix: "started-runner-" });
+    workDir = tempDir;
+
+    // Write project files to temp dir
+    for (const f of files) {
+      const filePath = f.path.startsWith("/") ? f.path.slice(1) : f.path;
+      const fullPath = `${tempDir}/${filePath}`;
+      const dir = fullPath.split("/").slice(0, -1).join("/");
+      try {
+        await Deno.mkdir(dir, { recursive: true });
+      } catch { /* dir exists */ }
+      await Deno.writeTextFile(fullPath, f.content);
+    }
+  }
+
+  // Parse command into executable and args
+  const parts = parseCommand(command);
+  const executable = parts[0];
+  const args = parts.slice(1);
+
+  // Map tsc -> npx tsc
+  let cmd: string[];
+  if (executable === "tsc") {
+    cmd = ["npx", "tsc", ...args];
+  } else {
+    cmd = [executable, ...args];
+  }
+
+  try {
+    const abortController = new AbortController();
+    const timer = setTimeout(() => abortController.abort(), timeoutS * 1000);
+
+    const process = new Deno.Command(cmd[0], {
+      args: cmd.slice(1),
+      cwd: workDir,
+      stdout: "piped",
+      stderr: "piped",
+      signal: abortController.signal,
+      env: {
+        ...Object.fromEntries(
+          ["PATH", "HOME", "USER", "SHELL", "LANG", "TERM", "NODE_PATH", "DENO_DIR"]
+            .filter(k => Deno.env.get(k))
+            .map(k => [k, Deno.env.get(k)!])
+        ),
+        NODE_ENV: "development",
+        CI: "true",
+      },
+    });
+
+    const output = await process.output();
+    clearTimeout(timer);
+
+    const stdout = new TextDecoder().decode(output.stdout);
+    const stderr = new TextDecoder().decode(output.stderr);
+    const exitCode = output.code;
+
+    // Read back changed files if we used a temp dir
+    let changedFiles: Array<{ path: string; content: string }> | undefined;
+    if (tempDir && files) {
+      changedFiles = await readChangedFiles(tempDir, files);
+    }
+
+    // Clean up temp dir
+    if (tempDir) {
+      try { await Deno.remove(tempDir, { recursive: true }); } catch { /* ignore */ }
+    }
+
+    return { stdout, stderr, exitCode, cwd: workDir === tempDir ? cwd : workDir, changedFiles };
+  } catch (err) {
+    // Clean up temp dir on error
+    if (tempDir) {
+      try { await Deno.remove(tempDir, { recursive: true }); } catch { /* ignore */ }
+    }
+
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { stdout: "", stderr: `⚠ Command timed out after ${timeoutS}s\n`, exitCode: 124, cwd };
+    }
+    return { stdout: "", stderr: `⚠ Execution error: ${err instanceof Error ? err.message : String(err)}\n`, exitCode: 1, cwd };
+  }
+}
+
+// Parse a command string into parts, respecting quotes
+function parseCommand(cmd: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let inQuote: string | null = null;
+
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (inQuote) {
+      if (ch === inQuote) { inQuote = null; }
+      else { current += ch; }
+    } else if (ch === '"' || ch === "'") {
+      inQuote = ch;
+    } else if (ch === " " || ch === "\t") {
+      if (current) { parts.push(current); current = ""; }
+    } else {
+      current += ch;
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+// Read files that were modified in the temp workspace
+async function readChangedFiles(
+  tempDir: string,
+  originalFiles: Array<{ path: string; content: string }>
+): Promise<Array<{ path: string; content: string }>> {
+  const changed: Array<{ path: string; content: string }> = [];
+  const originalMap = new Map(originalFiles.map(f => [f.path.startsWith("/") ? f.path.slice(1) : f.path, f.content]));
+
+  for (const [relPath, origContent] of originalMap) {
+    try {
+      const newContent = await Deno.readTextFile(`${tempDir}/${relPath}`);
+      if (newContent !== origContent) {
+        changed.push({ path: `/${relPath}`, content: newContent });
+      }
+    } catch { /* file deleted or unreadable */ }
+  }
+
+  // Check for new files (node_modules excluded)
+  try {
+    for await (const entry of walkDir(tempDir)) {
+      const relPath = entry.slice(tempDir.length + 1);
+      if (relPath.startsWith("node_modules/") || relPath.startsWith(".git/")) continue;
+      if (!originalMap.has(relPath)) {
+        try {
+          const content = await Deno.readTextFile(entry);
+          if (content.length < 100000) { // skip huge files
+            changed.push({ path: `/${relPath}`, content });
+          }
+        } catch { /* skip binary/unreadable */ }
+      }
+    }
+  } catch { /* ignore walk errors */ }
+
+  return changed;
+}
+
+// Simple recursive file walker
+async function* walkDir(dir: string): AsyncGenerator<string> {
+  try {
+    for await (const entry of Deno.readDir(dir)) {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isFile) yield path;
+      else if (entry.isDirectory && !entry.name.startsWith(".") && entry.name !== "node_modules") {
+        yield* walkDir(path);
+      }
+    }
+  } catch { /* ignore permission errors */ }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { command, cwd, timeout_s, project_id } = await req.json() as {
+    const { command, cwd, timeout_s, project_id, files } = await req.json() as {
       command: string;
       cwd?: string;
       timeout_s?: number;
       project_id?: string;
+      files?: Array<{ path: string; content: string }>;
     };
 
     if (!command) {
@@ -204,13 +389,13 @@ serve(async (req) => {
     }
 
     const currentCwd = cwd || "/workspace";
+    const timeoutS = timeout_s || 60;
     const user = await getUser(req);
     const db = getServiceClient();
 
     // ─── Denylist check ───
     for (const pattern of DENIED_PATTERNS) {
       if (pattern.test(command)) {
-        // Audit the denial
         if (project_id && user?.id) {
           await db.from("mcp_audit_log").insert({
             project_id, user_id: user.id, server_key: "runner",
@@ -263,7 +448,6 @@ serve(async (req) => {
     const builtin = executeBuiltin(command, currentCwd);
     if (builtin.handled) {
       const durationMs = Date.now() - startTime;
-      // Persist run
       if (project_id && user?.id) {
         db.from("runs").insert({
           project_id, user_id: user.id, command,
@@ -349,12 +533,86 @@ serve(async (req) => {
       return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
     }
 
+    // ─── Real subprocess execution via Deno.Command ───
+    const cmdParts = parseCommand(command);
+    const executable = cmdParts[0];
+
+    if (hasDenoCommand && SUBPROCESS_COMMANDS.has(executable)) {
+      const result = await executeSubprocess(command, currentCwd, timeoutS, files);
+      const durationMs = Date.now() - startTime;
+
+      if (project_id && user?.id) {
+        db.from("runs").insert({
+          project_id, user_id: user.id, command,
+          stdout: result.stdout.slice(0, 10000),
+          stderr: result.stderr.slice(0, 10000),
+          exit_code: result.exitCode,
+          status: result.exitCode === 0 ? "success" : "failed",
+        }).then(() => {}).catch(() => {});
+      }
+
+      // If we have changed files, return as JSON so frontend can merge
+      if (result.changedFiles && result.changedFiles.length > 0) {
+        return new Response(
+          JSON.stringify({
+            ok: result.exitCode === 0,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exitCode: result.exitCode,
+            cwd: result.cwd,
+            durationMs,
+            changedFiles: result.changedFiles,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Stream output
+      const stream = new ReadableStream({
+        start(controller) {
+          if (result.stderr) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: result.stderr })}\n\n`));
+          if (result.stdout) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stdout", data: result.stdout })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", exitCode: result.exitCode, cwd: result.cwd, durationMs })}\n\n`));
+          controller.close();
+        },
+      });
+      return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+    }
+
     // ─── Pipe/compound commands ───
     if (command.includes(" | ") || command.includes(" && ") || command.includes(" ; ")) {
+      // Try to execute via shell if Deno.Command is available
+      if (hasDenoCommand) {
+        try {
+          const result = await executeSubprocess(`sh -c ${JSON.stringify(command)}`, currentCwd, timeoutS, files);
+          const durationMs = Date.now() - startTime;
+
+          if (project_id && user?.id) {
+            db.from("runs").insert({
+              project_id, user_id: user.id, command,
+              stdout: result.stdout.slice(0, 10000),
+              stderr: result.stderr.slice(0, 10000),
+              exit_code: result.exitCode,
+              status: result.exitCode === 0 ? "success" : "failed",
+            }).then(() => {}).catch(() => {});
+          }
+
+          const stream = new ReadableStream({
+            start(controller) {
+              if (result.stderr) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: result.stderr })}\n\n`));
+              if (result.stdout) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stdout", data: result.stdout })}\n\n`));
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", exitCode: result.exitCode, cwd: result.cwd, durationMs })}\n\n`));
+              controller.close();
+            },
+          });
+          return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+        } catch { /* fall through to error message */ }
+      }
+
       const durationMs = Date.now() - startTime;
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: "⚠ Pipe/compound commands are not fully supported.\nTip: Run each command separately.\n" })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: "⚠ Pipe/compound commands are not fully supported in sandbox mode.\nTip: Run each command separately.\n" })}\n\n`));
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", exitCode: 1, cwd: currentCwd, durationMs })}\n\n`));
           controller.close();
         },
@@ -362,18 +620,46 @@ serve(async (req) => {
       return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
     }
 
-    // ─── Fallback: unrecognized command ───
+    // ─── Fallback: try Deno.Command for any unknown command ───
+    if (hasDenoCommand) {
+      try {
+        const result = await executeSubprocess(command, currentCwd, timeoutS, files);
+        const durationMs = Date.now() - startTime;
+
+        if (project_id && user?.id) {
+          db.from("runs").insert({
+            project_id, user_id: user.id, command,
+            stdout: result.stdout.slice(0, 10000),
+            stderr: result.stderr.slice(0, 10000),
+            exit_code: result.exitCode,
+            status: result.exitCode === 0 ? "success" : "failed",
+          }).then(() => {}).catch(() => {});
+        }
+
+        const stream = new ReadableStream({
+          start(controller) {
+            if (result.stderr) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: result.stderr })}\n\n`));
+            if (result.stdout) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stdout", data: result.stdout })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", exitCode: result.exitCode, cwd: result.cwd, durationMs })}\n\n`));
+            controller.close();
+          },
+        });
+        return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+      } catch { /* fall through to sandbox fallback */ }
+    }
+
+    // ─── Sandbox fallback: command not available ───
     const durationMs = Date.now() - startTime;
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: `$ ${command}\nbash: ${command.split(/\s+/)[0]}: command requires a runner session.\n\nTo run complex commands, connect a runner via Project Settings.\nBuilt-in support: echo, pwd, date, node -e, python -c, ruby -e, php -r\n` })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "stderr", data: `$ ${command}\nbash: ${cmdParts[0]}: command not found\n\nThis command is not available in the current runner environment.\nBuilt-in support: echo, pwd, date, node -e, python -c, ruby -e, php -r\nSubprocess support: node, npm, npx, deno, python, go, cargo, gcc, and more.\n` })}\n\n`));
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", exitCode: 127, cwd: currentCwd, durationMs })}\n\n`));
         controller.close();
       },
     });
 
     if (project_id && user?.id) {
-      db.from("runs").insert({ project_id, user_id: user.id, command, stderr: `command not found: ${command.split(/\s+/)[0]}`, exit_code: 127, status: "failed" }).then(() => {}).catch(() => {});
+      db.from("runs").insert({ project_id, user_id: user.id, command, stderr: `command not found: ${cmdParts[0]}`, exit_code: 127, status: "failed" }).then(() => {}).catch(() => {});
     }
 
     return new Response(stream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });

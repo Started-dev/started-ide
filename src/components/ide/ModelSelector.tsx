@@ -59,6 +59,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
               }`}
             >
               <span className="font-medium">{m.label}</span>
+              {m.id === 'started/started-ai' && <span className="ml-1 text-[9px] px-1 py-0.5 bg-primary/15 text-primary rounded-sm font-semibold">default</span>}
               <span className="ml-1.5 text-muted-foreground">— {m.desc}</span>
             </button>
           ))}

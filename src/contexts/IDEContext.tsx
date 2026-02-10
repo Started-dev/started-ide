@@ -915,11 +915,18 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     const run: RunResult = { id: `run-${Date.now()}`, command, status: 'running', logs: `$ ${command}\n`, timestamp: new Date() };
     setRuns(prev => [...prev, run]);
 
+    // Determine if we need to send project files for this command
+    const needsFiles = /^(npm|npx|node|deno|python|python3|pip|pip3|tsc|bun|bunx|go|cargo|rustc|gcc|g\+\+|javac|java|ruby|php|dart|swift|kotlin)\b/.test(command.trim());
+    const filesToSend = needsFiles
+      ? filesRef.current.filter(f => !f.isFolder).map(f => ({ path: f.path, content: f.content }))
+      : undefined;
+
     runCommandRemote({
       command,
       cwd: runnerSession?.cwd || '/workspace',
       timeoutS: 600,
       projectId: project.id,
+      files: filesToSend,
       onLog: (line) => {
         setRuns(prev => prev.map(r =>
           r.id === run.id ? { ...r, logs: r.logs + line } : r
@@ -937,6 +944,31 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
               }
             : r
         ));
+
+        // Merge changed files back into IDE state
+        if (result.changedFiles && result.changedFiles.length > 0) {
+          for (const changed of result.changedFiles) {
+            const existing = filesRef.current.find(f => f.path === changed.path);
+            if (existing) {
+              setFiles(prev => prev.map(f => f.path === changed.path ? { ...f, content: changed.content } : f));
+              saveFile(changed.path, changed.content);
+            } else {
+              // New file created by runner
+              const name = changed.path.split('/').pop() || changed.path;
+              const ext = name.split('.').pop() || '';
+              const parentPath = changed.path.split('/').slice(0, -1).join('/') || null;
+              const parentId = parentPath ? `folder-${parentPath}` : null;
+              const newFile: IDEFile = {
+                id: `f-${Date.now()}-${Math.random().toString(36).slice(2,5)}`,
+                name, path: changed.path, content: changed.content,
+                language: LANG_MAP[ext] || 'plaintext', parentId, isFolder: false,
+              };
+              setFiles(prev => [...prev, newFile]);
+              saveFile(changed.path, changed.content);
+            }
+          }
+          toast({ title: `${result.changedFiles.length} file(s) updated by runner` });
+        }
 
         // CI/CD: Auto-trigger event hooks
         if (result.exitCode === 0 && isDeployCommand(command)) {
@@ -981,7 +1013,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         setPendingPermission({ ...req, runId: run.id });
       },
     });
-  }, [runnerSession, project.id]);
+  }, [runnerSession, project.id, saveFile]);
 
   // ─── Permission Approval/Deny Handlers ───
 
@@ -1226,9 +1258,12 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   }, [switchProjectRaw]);
 
   const createProject = useCallback(async (name: string) => {
-    const newId = await createProjectRaw(name);
-    if (newId) {
-      await switchProjectRaw(newId);
+    const result = await createProjectRaw(name);
+    if ('error' in result) {
+      toast({ title: 'Cannot create project', description: result.error, variant: 'destructive' });
+    } else {
+      toast({ title: `Project created: ${name}` });
+      await switchProjectRaw(result.id);
     }
   }, [createProjectRaw, switchProjectRaw]);
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { IDEFile } from '@/types/ide';
 import type { User } from '@supabase/supabase-js';
+import { toast } from '@/hooks/use-toast';
 
 const SAVE_DEBOUNCE_MS = 1500;
 
@@ -123,13 +124,14 @@ export function useProjectPersistence(user: User | null) {
       }
     } catch (err) {
       console.error('Failed to switch project:', err);
+      toast({ title: 'Failed to switch project', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
       setState(prev => ({ ...prev, loading: false }));
     }
   }, []);
 
   // Create a new project (enforces max_projects quota)
-  const createProject = useCallback(async (name: string): Promise<string | null> => {
-    if (!user) return null;
+  const createProject = useCallback(async (name: string): Promise<{ id: string } | { error: string }> => {
+    if (!user) return { error: 'You must be signed in to create a project' };
     try {
       // Check plan quota
       const { data: ledger } = await supabase
@@ -149,8 +151,8 @@ export function useProjectPersistence(user: User | null) {
 
       const maxProjects = plan?.max_projects || 2;
       if (state.projects.length >= maxProjects) {
-        console.error(`Project limit reached (${maxProjects} for ${planKey} plan). Upgrade to create more.`);
-        return null;
+        const reason = `Project limit reached (${maxProjects} on ${planKey} plan). Upgrade to create more.`;
+        return { error: reason };
       }
 
       const { data: newProj, error } = await supabase
@@ -163,10 +165,10 @@ export function useProjectPersistence(user: User | null) {
 
       const newInfo: ProjectInfo = { id: newProj.id, name: newProj.name, created_at: newProj.created_at };
       setState(prev => ({ ...prev, projects: [newInfo, ...prev.projects] }));
-      return newProj.id;
+      return { id: newProj.id };
     } catch (err) {
       console.error('Failed to create project:', err);
-      return null;
+      return { error: err instanceof Error ? err.message : 'Unknown error creating project' };
     }
   }, [user, state.projects.length]);
 
@@ -180,6 +182,7 @@ export function useProjectPersistence(user: User | null) {
       }));
     } catch (err) {
       console.error('Failed to rename project:', err);
+      toast({ title: 'Failed to rename project', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
     }
   }, []);
 
@@ -194,6 +197,7 @@ export function useProjectPersistence(user: User | null) {
       return true;
     } catch (err) {
       console.error('Failed to delete project:', err);
+      toast({ title: 'Failed to delete project', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' });
       return false;
     }
   }, []);
