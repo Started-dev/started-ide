@@ -131,3 +131,9 @@ verify_jwt = false
 
 [functions.mcp-invoke]
 verify_jwt = false
+
+[functions.mcp-openclaw]
+verify_jwt = false
+
+[functions.openclaw-webhook]
+verify_jwt = false
