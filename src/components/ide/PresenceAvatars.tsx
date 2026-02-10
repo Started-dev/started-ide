@@ -16,16 +16,25 @@ export function PresenceAvatars({ users, onClick }: PresenceAvatarsProps) {
       title={`${users.length} collaborator${users.length > 1 ? 's' : ''} online`}
     >
       <div className="flex -space-x-1.5">
-        {users.slice(0, 3).map(u => (
-          <div
-            key={u.userId}
-            className="h-5 w-5 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold text-white"
-            style={{ backgroundColor: u.color }}
-            title={u.email}
-          >
-            {u.email[0].toUpperCase()}
-          </div>
-        ))}
+        {users.slice(0, 3).map(u => {
+          const displayName = (u as any).displayName;
+          const avatarUrl = (u as any).avatarUrl;
+          const label = displayName || u.email;
+          return (
+            <div
+              key={u.userId}
+              className="h-5 w-5 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold text-white overflow-hidden"
+              style={{ backgroundColor: avatarUrl ? 'transparent' : u.color }}
+              title={label}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={label} className="h-full w-full object-cover" />
+              ) : (
+                label[0].toUpperCase()
+              )}
+            </div>
+          );
+        })}
         {users.length > 3 && (
           <div className="h-5 w-5 rounded-full border-2 border-card bg-muted flex items-center justify-center text-[8px] font-medium text-muted-foreground">
             +{users.length - 3}

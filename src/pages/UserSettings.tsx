@@ -5,12 +5,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { ProfileForm } from '@/components/settings/ProfileForm';
+import { SecuritySection } from '@/components/settings/SecuritySection';
+import { PreferencesTab } from '@/components/settings/PreferencesTab';
 import {
-  ArrowLeft, User, CreditCard, Settings, Shield, Loader2,
-  Zap, Clock, MessageSquare, HardDrive, Check, Crown, ExternalLink,
+  ArrowLeft, CreditCard, Settings, Loader2,
+  Zap, Clock, MessageSquare, HardDrive, Check, Crown, ExternalLink, Sliders,
 } from 'lucide-react';
 
-type TabId = 'settings' | 'billing';
+type TabId = 'settings' | 'billing' | 'preferences';
 
 interface BillingPlan {
   key: string;
@@ -66,9 +69,7 @@ export default function UserSettings() {
     const plan = searchParams.get('plan');
     if (checkoutStatus === 'success' && plan) {
       toast.success(`Successfully upgraded to ${plan} plan!`);
-      // Clear query params
       setSearchParams({});
-      // Refresh usage data
       if (user) {
         supabase.from('api_usage_ledger').select('*').eq('owner_id', user.id)
           .order('period_start', { ascending: false }).limit(1)
@@ -126,6 +127,7 @@ export default function UserSettings() {
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
     { id: 'billing', label: 'Billing & Usage', icon: <CreditCard className="h-4 w-4" /> },
     { id: 'settings', label: 'Account', icon: <Settings className="h-4 w-4" /> },
+    { id: 'preferences', label: 'Preferences', icon: <Sliders className="h-4 w-4" /> },
   ];
 
   if (loading) {
@@ -172,7 +174,7 @@ export default function UserSettings() {
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-8 max-w-4xl">
-          {tab === 'settings' && <AccountTab user={user} signOut={signOut} />}
+          {tab === 'settings' && <AccountTab />}
           {tab === 'billing' && (
             <BillingTab
               plans={plans}
@@ -184,6 +186,7 @@ export default function UserSettings() {
               checkoutLoading={checkoutLoading}
             />
           )}
+          {tab === 'preferences' && <PreferencesTab />}
         </div>
       </div>
     </div>
@@ -192,46 +195,12 @@ export default function UserSettings() {
 
 // ─── Account Tab ───
 
-function AccountTab({ user, signOut }: { user: any; signOut: () => Promise<void> }) {
+function AccountTab() {
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold mb-1">Account Settings</h2>
-        <p className="text-sm text-muted-foreground">Manage your account details and preferences.</p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="p-4 rounded-lg border border-border bg-card space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{user?.email}</p>
-              <p className="text-xs text-muted-foreground">
-                Joined {user?.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-lg border border-border bg-card space-y-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Shield className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Security</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">User ID</p>
-              <p className="text-xs text-muted-foreground font-mono">{user?.id}</p>
-            </div>
-          </div>
-        </div>
-
-        <Button variant="destructive" size="sm" onClick={signOut} className="mt-4">
-          Sign Out
-        </Button>
-      </div>
+    <div className="space-y-10">
+      <ProfileForm />
+      <div className="border-t border-border" />
+      <SecuritySection />
     </div>
   );
 }
@@ -307,9 +276,7 @@ function BillingTab({
             <div>
               <p className="text-sm font-semibold capitalize">{currentPlan.key} Plan</p>
               <p className="text-xs text-muted-foreground">
-                {currentPlan.monthly_price_usd === 0
-                  ? 'Free'
-                  : `$${currentPlan.monthly_price_usd}/mo`}
+                {currentPlan.monthly_price_usd === 0 ? 'Free' : `$${currentPlan.monthly_price_usd}/mo`}
               </p>
             </div>
           </div>
