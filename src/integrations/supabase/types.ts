@@ -14,6 +14,111 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_presets: {
+        Row: {
+          created_at: string
+          default_permissions: Json
+          default_tools: Json
+          description: string | null
+          id: string
+          key: string
+          name: string
+          system_prompt: string
+        }
+        Insert: {
+          created_at?: string
+          default_permissions?: Json
+          default_tools?: Json
+          description?: string | null
+          id?: string
+          key: string
+          name: string
+          system_prompt: string
+        }
+        Update: {
+          created_at?: string
+          default_permissions?: Json
+          default_tools?: Json
+          description?: string | null
+          id?: string
+          key?: string
+          name?: string
+          system_prompt?: string
+        }
+        Relationships: []
+      }
+      api_usage_ledger: {
+        Row: {
+          id: string
+          mcp_calls: number
+          model_tokens: number
+          owner_id: string
+          period_end: string
+          period_start: string
+          plan_key: string
+          runner_minutes: number
+          storage_mb: number
+        }
+        Insert: {
+          id?: string
+          mcp_calls?: number
+          model_tokens?: number
+          owner_id: string
+          period_end: string
+          period_start: string
+          plan_key?: string
+          runner_minutes?: number
+          storage_mb?: number
+        }
+        Update: {
+          id?: string
+          mcp_calls?: number
+          model_tokens?: number
+          owner_id?: string
+          period_end?: string
+          period_start?: string
+          plan_key?: string
+          runner_minutes?: number
+          storage_mb?: number
+        }
+        Relationships: []
+      }
+      billing_plans: {
+        Row: {
+          created_at: string
+          features: Json
+          included_mcp_calls: number
+          included_runner_minutes: number
+          included_tokens: number
+          key: string
+          max_concurrent_runs: number
+          max_projects: number
+          monthly_price_usd: number
+        }
+        Insert: {
+          created_at?: string
+          features?: Json
+          included_mcp_calls?: number
+          included_runner_minutes?: number
+          included_tokens?: number
+          key: string
+          max_concurrent_runs?: number
+          max_projects?: number
+          monthly_price_usd?: number
+        }
+        Update: {
+          created_at?: string
+          features?: Json
+          included_mcp_calls?: number
+          included_runner_minutes?: number
+          included_tokens?: number
+          key?: string
+          max_concurrent_runs?: number
+          max_projects?: number
+          monthly_price_usd?: number
+        }
+        Relationships: []
+      }
       collab_messages: {
         Row: {
           content: string
@@ -154,6 +259,183 @@ export type Database = {
           },
         ]
       }
+      mcp_audit_log: {
+        Row: {
+          agent_run_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          input_hash: string
+          latency_ms: number | null
+          output_hash: string | null
+          project_id: string
+          risk: string
+          server_key: string
+          status: string
+          tool_name: string
+          user_id: string | null
+        }
+        Insert: {
+          agent_run_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_hash: string
+          latency_ms?: number | null
+          output_hash?: string | null
+          project_id: string
+          risk: string
+          server_key: string
+          status: string
+          tool_name: string
+          user_id?: string | null
+        }
+        Update: {
+          agent_run_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          input_hash?: string
+          latency_ms?: number | null
+          output_hash?: string | null
+          project_id?: string
+          risk?: string
+          server_key?: string
+          status?: string
+          tool_name?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_audit_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcp_permissions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effect: string
+          id: string
+          project_id: string
+          reason: string | null
+          rule_type: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effect: string
+          id?: string
+          project_id: string
+          reason?: string | null
+          rule_type: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effect?: string
+          id?: string
+          project_id?: string
+          reason?: string | null
+          rule_type?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_permissions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mcp_servers: {
+        Row: {
+          created_at: string
+          default_risk: string
+          description: string | null
+          homepage_url: string | null
+          id: string
+          key: string
+          name: string
+          requires_secrets: boolean
+        }
+        Insert: {
+          created_at?: string
+          default_risk?: string
+          description?: string | null
+          homepage_url?: string | null
+          id?: string
+          key: string
+          name: string
+          requires_secrets?: boolean
+        }
+        Update: {
+          created_at?: string
+          default_risk?: string
+          description?: string | null
+          homepage_url?: string | null
+          id?: string
+          key?: string
+          name?: string
+          requires_secrets?: boolean
+        }
+        Relationships: []
+      }
+      mcp_tools: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_name: string | null
+          id: string
+          input_schema: Json
+          is_enabled: boolean
+          output_schema: Json
+          risk: string
+          server_id: string
+          tool_name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_name?: string | null
+          id?: string
+          input_schema?: Json
+          is_enabled?: boolean
+          output_schema?: Json
+          risk?: string
+          server_id: string
+          tool_name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_name?: string | null
+          id?: string
+          input_schema?: Json
+          is_enabled?: boolean
+          output_schema?: Json
+          risk?: string
+          server_id?: string
+          tool_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_tools_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_servers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_collaborators: {
         Row: {
           accepted: boolean
@@ -220,6 +502,48 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_mcp_servers: {
+        Row: {
+          config: Json
+          created_at: string
+          id: string
+          is_enabled: boolean
+          project_id: string
+          server_id: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          project_id: string
+          server_id: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          project_id?: string
+          server_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_mcp_servers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_mcp_servers_server_id_fkey"
+            columns: ["server_id"]
+            isOneToOne: false
+            referencedRelation: "mcp_servers"
             referencedColumns: ["id"]
           },
         ]
