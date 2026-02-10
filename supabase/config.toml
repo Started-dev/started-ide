@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.mcp-vercel]
 verify_jwt = false
+
+[functions.mcp-supabase]
+verify_jwt = false
