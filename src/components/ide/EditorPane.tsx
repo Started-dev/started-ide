@@ -60,7 +60,7 @@ export function EditorPane() {
       </div>
 
       {/* Editor */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 relative z-50">
         {activeFile && (
           <Editor
             key={activeFile.id}
