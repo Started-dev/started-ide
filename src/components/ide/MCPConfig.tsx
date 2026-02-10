@@ -82,6 +82,79 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     secondaryLabel: 'n8n Instance URL',
     secondaryPlaceholder: 'https://your-instance.app.n8n.cloud',
   },
+  'mcp-telegram': {
+    storageKey: 'telegram_bot_token',
+    label: 'Telegram Bot Token',
+    placeholder: '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11',
+    generateUrl: 'https://t.me/BotFather',
+    generateLabel: 'Create a bot with @BotFather',
+  },
+  'mcp-google-sheets': {
+    storageKey: 'google_api_key',
+    label: 'Google API Key / OAuth Token',
+    placeholder: 'AIzaSy... or ya29.a0...',
+    generateUrl: 'https://console.cloud.google.com/apis/credentials',
+    generateLabel: 'Create credentials in Google Cloud Console',
+  },
+  'mcp-alpha-vantage': {
+    storageKey: 'alpha_vantage_key',
+    label: 'Alpha Vantage API Key',
+    placeholder: 'xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://www.alphavantage.co/support/#api-key',
+    generateLabel: 'Get a free API key',
+  },
+  'mcp-coinmarketcap': {
+    storageKey: 'cmc_api_key',
+    label: 'CoinMarketCap API Key',
+    placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    generateUrl: 'https://coinmarketcap.com/api/',
+    generateLabel: 'Get an API key from CoinMarketCap',
+  },
+  'mcp-huggingface': {
+    storageKey: 'hf_token',
+    label: 'Hugging Face Token',
+    placeholder: 'hf_xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://huggingface.co/settings/tokens',
+    generateLabel: 'Create a token on Hugging Face',
+  },
+  'mcp-docker': {
+    storageKey: 'docker_host',
+    label: 'Docker Host URL',
+    placeholder: 'http://localhost:2375',
+    generateUrl: 'https://docs.docker.com/engine/api/',
+    generateLabel: 'Docker Engine API docs',
+    secondaryKey: 'docker_api_key',
+    secondaryLabel: 'Docker API Key (optional)',
+    secondaryPlaceholder: 'Optional bearer token',
+  },
+  'mcp-postgres': {
+    storageKey: 'postgres_url',
+    label: 'PostgreSQL Connection URL',
+    placeholder: 'postgresql://user:pass@host:5432/dbname',
+    generateUrl: 'https://www.postgresql.org/docs/current/libpq-connect.html',
+    generateLabel: 'PostgreSQL connection docs',
+  },
+  'mcp-digitalocean': {
+    storageKey: 'do_token',
+    label: 'DigitalOcean API Token',
+    placeholder: 'dop_v1_xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://cloud.digitalocean.com/account/api/tokens',
+    generateLabel: 'Generate a token on DigitalOcean',
+  },
+  'mcp-twitter': {
+    storageKey: 'twitter_bearer_token',
+    label: 'X (Twitter) Bearer Token',
+    placeholder: 'AAAAAAAAAAAAAAAAAAAAAxxxxxxx',
+    generateUrl: 'https://developer.x.com/en/portal/dashboard',
+    generateLabel: 'Get credentials from X Developer Portal',
+  },
+  'mcp-linkedin': {
+    storageKey: 'linkedin_token',
+    label: 'LinkedIn Access Token',
+    placeholder: 'AQVxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://www.linkedin.com/developers/apps',
+    generateLabel: 'Create an app on LinkedIn Developer',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -134,6 +207,8 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
           : serverId === 'mcp-supabase' && toolName === 'supabase_list_projects'
             ? {}
             : {};
+      const secondaryVal = cfg.secondaryKey ? (sessionStorage.getItem(cfg.secondaryKey) || tokenInputs[`${serverId}_secondary`]) : undefined;
+      const regionVal = cfg.regionKey ? (sessionStorage.getItem(cfg.regionKey) || 'us-east-1') : undefined;
       const result = await callMCPTool({
         tool: toolName,
         input: defaultInput,
@@ -143,13 +218,24 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         supabaseToken: serverId === 'mcp-supabase' ? token : undefined,
         cloudflareToken: serverId === 'mcp-cloudflare' ? token : undefined,
         awsAccessKeyId: serverId === 'mcp-aws' ? token : undefined,
-        awsSecretAccessKey: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_secret_access_key') || tokenInputs[`${serverId}_secondary`]) : undefined,
-        awsRegion: serverId === 'mcp-aws' ? (sessionStorage.getItem('aws_region') || 'us-east-1') : undefined,
+        awsSecretAccessKey: serverId === 'mcp-aws' ? secondaryVal : undefined,
+        awsRegion: serverId === 'mcp-aws' ? regionVal : undefined,
         stripeToken: serverId === 'mcp-stripe' ? token : undefined,
         slackToken: serverId === 'mcp-slack' ? token : undefined,
         notionToken: serverId === 'mcp-notion' ? token : undefined,
         n8nApiKey: serverId === 'mcp-n8n' ? token : undefined,
-        n8nBaseUrl: serverId === 'mcp-n8n' ? (sessionStorage.getItem('n8n_base_url') || tokenInputs[`${serverId}_secondary`]) : undefined,
+        n8nBaseUrl: serverId === 'mcp-n8n' ? secondaryVal : undefined,
+        telegramBotToken: serverId === 'mcp-telegram' ? token : undefined,
+        googleApiKey: serverId === 'mcp-google-sheets' ? token : undefined,
+        alphaVantageKey: serverId === 'mcp-alpha-vantage' ? token : undefined,
+        cmcApiKey: serverId === 'mcp-coinmarketcap' ? token : undefined,
+        hfToken: serverId === 'mcp-huggingface' ? token : undefined,
+        dockerHost: serverId === 'mcp-docker' ? token : undefined,
+        dockerApiKey: serverId === 'mcp-docker' ? secondaryVal : undefined,
+        postgresUrl: serverId === 'mcp-postgres' ? token : undefined,
+        doToken: serverId === 'mcp-digitalocean' ? token : undefined,
+        twitterBearerToken: serverId === 'mcp-twitter' ? token : undefined,
+        linkedinToken: serverId === 'mcp-linkedin' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
@@ -165,6 +251,10 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
   };
 
   const isAuthServer = (serverId: string) => !!TOKEN_CONFIG[serverId];
+  const noAuthNeeded = (serverId: string) => {
+    const s = servers.find(s => s.id === serverId);
+    return s && !s.requiresAuth;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
@@ -314,7 +404,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
                             <span className="text-xs font-mono text-foreground">{tool.name}</span>
                             <p className="text-[10px] text-muted-foreground truncate">{tool.description}</p>
                           </div>
-                          {isAuth && serverHasToken && (
+                          {(noAuthNeeded(server.id) || (isAuth && serverHasToken)) && (
                             <button
                               onClick={() => handleTestTool(server.id, tool.name)}
                               disabled={testing}

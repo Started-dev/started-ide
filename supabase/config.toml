@@ -32,3 +32,51 @@ verify_jwt = false
 
 [functions.mcp-slack]
 verify_jwt = false
+
+[functions.mcp-notion]
+verify_jwt = false
+
+[functions.mcp-n8n]
+verify_jwt = false
+
+[functions.mcp-telegram]
+verify_jwt = false
+
+[functions.mcp-google-sheets]
+verify_jwt = false
+
+[functions.mcp-coingecko]
+verify_jwt = false
+
+[functions.mcp-alpha-vantage]
+verify_jwt = false
+
+[functions.mcp-coinmarketcap]
+verify_jwt = false
+
+[functions.mcp-defillama]
+verify_jwt = false
+
+[functions.mcp-huggingface]
+verify_jwt = false
+
+[functions.mcp-docker]
+verify_jwt = false
+
+[functions.mcp-postgres]
+verify_jwt = false
+
+[functions.mcp-digitalocean]
+verify_jwt = false
+
+[functions.mcp-twitter]
+verify_jwt = false
+
+[functions.mcp-linkedin]
+verify_jwt = false
+
+[functions.mcp-firecrawl]
+verify_jwt = false
+
+[functions.mcp-perplexity]
+verify_jwt = false
