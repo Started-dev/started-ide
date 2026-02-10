@@ -510,15 +510,16 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setShowOutput(true);
       const run: RunResult = { id: `run-${Date.now()}`, command, status: 'running', logs: `$ ${command}\n`, timestamp: new Date() };
       setRuns(prev => [...prev, run]);
-      setTimeout(() => {
-        setRuns(prev => prev.map(r =>
-          r.id === run.id
-            ? { ...r, status: 'success' as const, logs: r.logs + `\n> Running after patch applied...\n\n✓ Process exited with code 0\n`, exitCode: 0 }
-            : r
-        ));
-      }, 1500);
+      runCommandRemote({
+        command,
+        cwd: runnerSession?.cwd || '/workspace',
+        timeoutS: 600,
+        onLog: (line) => { setRuns(prev => prev.map(r => r.id === run.id ? { ...r, logs: r.logs + line } : r)); },
+        onDone: (result) => { setRuns(prev => prev.map(r => r.id === run.id ? { ...r, status: result.exitCode === 0 ? 'success' as const : 'error' as const, logs: r.logs + `\n${result.exitCode === 0 ? '✓' : '✗'} Exited ${result.exitCode}\n`, exitCode: result.exitCode, cwd: result.cwd, durationMs: result.durationMs } : r)); },
+        onError: (error) => { setRuns(prev => prev.map(r => r.id === run.id ? { ...r, status: 'error' as const, logs: r.logs + `\n⚠ ${error}\n`, exitCode: 1 } : r)); },
+      });
     }
-  }, [applyPatchToFiles]);
+  }, [applyPatchToFiles, runnerSession]);
 
   const cancelPatch = useCallback((patchId: string) => {
     setPendingPatches(prev => prev.map(p => p.id === patchId ? { ...p, status: 'cancelled' as const } : p));
