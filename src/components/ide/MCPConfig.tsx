@@ -155,6 +155,16 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://www.linkedin.com/developers/apps',
     generateLabel: 'Create an app on LinkedIn Developer',
   },
+  'mcp-twilio': {
+    storageKey: 'twilio_account_sid',
+    label: 'Twilio Account SID',
+    placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://console.twilio.com/',
+    generateLabel: 'Get credentials from Twilio Console',
+    secondaryKey: 'twilio_auth_token',
+    secondaryLabel: 'Twilio Auth Token',
+    secondaryPlaceholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -236,6 +246,8 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         doToken: serverId === 'mcp-digitalocean' ? token : undefined,
         twitterBearerToken: serverId === 'mcp-twitter' ? token : undefined,
         linkedinToken: serverId === 'mcp-linkedin' ? token : undefined,
+        twilioAccountSid: serverId === 'mcp-twilio' ? token : undefined,
+        twilioAuthToken: serverId === 'mcp-twilio' ? secondaryVal : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

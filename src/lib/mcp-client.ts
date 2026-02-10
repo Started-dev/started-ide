@@ -26,6 +26,8 @@ export interface MCPToolCallRequest {
   doToken?: string;
   twitterBearerToken?: string;
   linkedinToken?: string;
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
   serverId: string;
 }
 
@@ -68,6 +70,10 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
     case 'mcp-digitalocean': body.do_token = req.doToken; break;
     case 'mcp-twitter': body.twitter_bearer_token = req.twitterBearerToken; break;
     case 'mcp-linkedin': body.linkedin_token = req.linkedinToken; break;
+    case 'mcp-twilio':
+      body.twilio_account_sid = req.twilioAccountSid;
+      body.twilio_auth_token = req.twilioAuthToken;
+      break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 
