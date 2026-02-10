@@ -4,7 +4,7 @@ import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, 
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
-import { OutputPanel } from './OutputPanel';
+import { TerminalPanel } from './TerminalPanel';
 import { CommandPalette } from './CommandPalette';
 import { AgentTimeline } from './AgentTimeline';
 import { MCPConfig } from './MCPConfig';
@@ -203,7 +203,7 @@ export function IDELayout() {
               <div className="flex-1 min-h-0">
                 <EditorPane />
               </div>
-              <OutputPanel />
+              <TerminalPanel />
             </div>
           </Panel>
 
