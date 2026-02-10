@@ -29,6 +29,7 @@ export interface MCPToolCallRequest {
   twilioAccountSid?: string;
   twilioAuthToken?: string;
   zapierWebhookUrl?: string;
+  airtableToken?: string;
   serverId: string;
 }
 
@@ -76,6 +77,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       body.twilio_auth_token = req.twilioAuthToken;
       break;
     case 'mcp-zapier': body.zapier_webhook_url = req.zapierWebhookUrl; break;
+    case 'mcp-airtable': body.airtable_token = req.airtableToken; break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 
