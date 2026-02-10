@@ -30,6 +30,11 @@ export interface MCPToolCallRequest {
   twilioAuthToken?: string;
   zapierWebhookUrl?: string;
   airtableToken?: string;
+  jiraEmail?: string;
+  jiraApiToken?: string;
+  jiraDomain?: string;
+  sfInstanceUrl?: string;
+  sfAccessToken?: string;
   serverId: string;
 }
 
@@ -78,6 +83,15 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       break;
     case 'mcp-zapier': body.zapier_webhook_url = req.zapierWebhookUrl; break;
     case 'mcp-airtable': body.airtable_token = req.airtableToken; break;
+    case 'mcp-jira':
+      body.jira_email = req.jiraEmail;
+      body.jira_api_token = req.jiraApiToken;
+      body.jira_domain = req.jiraDomain;
+      break;
+    case 'mcp-salesforce':
+      body.sf_instance_url = req.sfInstanceUrl;
+      body.sf_access_token = req.sfAccessToken;
+      break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 
