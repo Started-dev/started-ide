@@ -195,16 +195,18 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   // Initialize conversations when project loads and DB conversations are ready
   useEffect(() => {
     if (!projectId || convPersistence.loading) return;
+    // Only initialize once per project
     if (convInitializedRef.current === projectId) return;
-    convInitializedRef.current = projectId;
 
     const projectConvs = convPersistence.conversations.filter(c => c.projectId === projectId);
     if (projectConvs.length > 0) {
+      convInitializedRef.current = projectId;
       const latest = projectConvs[projectConvs.length - 1];
       setActiveConversationId(latest.id);
       setChatMessages(latest.messages);
     } else {
       // Create a fresh conversation
+      convInitializedRef.current = projectId;
       const newConv = makeNewConversation(projectId);
       setActiveConversationId(newConv.id);
       setChatMessages(newConv.messages);
@@ -212,12 +214,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
     setAgentRun(null);
     setActiveRightPanel('chat');
-  }, [projectId, convPersistence.loading, convPersistence.conversations, makeNewConversation]);
-
-  // Reset initialized ref when project changes
-  useEffect(() => {
-    convInitializedRef.current = null;
-  }, [projectId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, convPersistence.loading, convPersistence.conversations]);
 
   // Sync chatMessages to DB (debounced)
   const prevMessagesRef = useRef(chatMessages);
