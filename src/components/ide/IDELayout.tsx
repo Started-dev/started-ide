@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
@@ -13,6 +13,7 @@ import { HooksConfig } from './HooksConfig';
 import { SnapshotBrowser } from './SnapshotBrowser';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { CollaborationPanel } from './CollaborationPanel';
+import { TransactionBuilder } from './TransactionBuilder';
 import { PresenceAvatars } from './PresenceAvatars';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +38,7 @@ export function IDELayout() {
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
   const [showCollab, setShowCollab] = useState(false);
+  const [showTxBuilder, setShowTxBuilder] = useState(false);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -128,6 +130,14 @@ export function IDELayout() {
           >
             <Plug className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">MCP</span>
+          </button>
+          <button
+            onClick={() => setShowTxBuilder(true)}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="Transaction Builder"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">TX</span>
           </button>
           <PresenceAvatars users={presenceUsers} onClick={() => setShowCollab(true)} />
           <button
@@ -307,6 +317,7 @@ export function IDELayout() {
           onClose={() => setShowCollab(false)}
         />
       )}
+      {showTxBuilder && <TransactionBuilder onClose={() => setShowTxBuilder(false)} />}
     </div>
   );
 }
