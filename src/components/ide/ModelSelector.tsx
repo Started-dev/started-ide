@@ -2,20 +2,28 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 export const AVAILABLE_MODELS = [
-  { id: 'started/started-ai', label: 'StartedAI', desc: 'Optimal all-around default' },
-  { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash', desc: 'Fast & capable' },
-  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Heavy reasoning' },
-  { id: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro', desc: 'Next-gen' },
-  { id: 'openai/gpt-5', label: 'GPT-5', desc: 'Powerful all-rounder' },
-  { id: 'openai/gpt-5-mini', label: 'GPT-5 Mini', desc: 'Balanced' },
-  { id: 'anthropic/claude-4-opus', label: 'Claude 4 Opus', desc: 'Deep reasoning' },
-  { id: 'anthropic/claude-4.5-opus', label: 'Claude 4.5 Opus', desc: 'Advanced reasoning' },
-  { id: 'anthropic/claude-4.6-opus', label: 'Claude 4.6 Opus', desc: 'Latest & strongest' },
-  { id: 'anthropic/claude-4-sonnet', label: 'Claude 4 Sonnet', desc: 'Fast & smart' },
-  { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku', desc: 'Speed-optimized' },
+  { id: 'started/started-ai', label: 'StartedAI', desc: 'Token-efficient default', provider: 'started' },
+  { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash', desc: 'Fast & capable', provider: 'google' },
+  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Heavy reasoning', provider: 'google' },
+  { id: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro', desc: 'Next-gen', provider: 'google' },
+  { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Balanced', provider: 'google' },
+  { id: 'openai/gpt-5', label: 'GPT-5', desc: 'Powerful all-rounder', provider: 'openai' },
+  { id: 'openai/gpt-5.2', label: 'GPT-5.2', desc: 'Latest OpenAI', provider: 'openai' },
+  { id: 'openai/gpt-5-mini', label: 'GPT-5 Mini', desc: 'Balanced', provider: 'openai' },
+  { id: 'openai/gpt-5-nano', label: 'GPT-5 Nano', desc: 'Speed-optimized', provider: 'openai' },
+  { id: 'anthropic/claude-sonnet-4', label: 'Claude 4 Sonnet', desc: 'Fast & smart', provider: 'anthropic' },
+  { id: 'anthropic/claude-opus-4', label: 'Claude 4 Opus', desc: 'Deep reasoning', provider: 'anthropic' },
+  { id: 'anthropic/claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku', desc: 'Speed-optimized', provider: 'anthropic' },
 ] as const;
 
 export type ModelId = typeof AVAILABLE_MODELS[number]['id'];
+
+const PROVIDER_COLORS: Record<string, string> = {
+  started: 'bg-primary/15 text-primary',
+  google: 'bg-blue-500/15 text-blue-400',
+  openai: 'bg-green-500/15 text-green-400',
+  anthropic: 'bg-amber-500/15 text-amber-400',
+};
 
 interface ModelSelectorProps {
   value: ModelId;
@@ -27,7 +35,6 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -49,7 +56,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         <ChevronDown className="h-2.5 w-2.5" />
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 mb-0 z-50 bg-popover border border-border rounded-md shadow-lg min-w-[200px] py-1">
+        <div className="absolute bottom-full left-0 mb-0 z-50 bg-popover border border-border rounded-md shadow-lg min-w-[240px] py-1">
           {AVAILABLE_MODELS.map(m => (
             <button
               key={m.id}
@@ -60,7 +67,8 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
             >
               <span className="font-medium">{m.label}</span>
               {m.id === 'started/started-ai' && <span className="ml-1 text-[9px] px-1 py-0.5 bg-primary/15 text-primary rounded-sm font-semibold">default</span>}
-              <span className="ml-1.5 text-muted-foreground">— {m.desc}</span>
+              <span className={`ml-1.5 text-[9px] px-1 py-0.5 rounded-sm ${PROVIDER_COLORS[m.provider] || ''}`}>{m.provider}</span>
+              <span className="ml-1 text-muted-foreground">— {m.desc}</span>
             </button>
           ))}
         </div>

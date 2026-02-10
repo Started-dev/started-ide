@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 const AGENT_SYSTEM_PROMPT = `You are an autonomous coding agent running inside a cloud IDE.
 You are given a GOAL and project files as context. You operate in a loop:
@@ -33,6 +33,140 @@ Rules:
 - If you've iterated 5+ times without success, set action to "error" with explanation.
 - Keep patches minimal and focused.
 - Never output anything outside the JSON structure.`;
+
+// ─── Model cost multipliers ───
+const MODEL_MULTIPLIERS: Record<string, number> = {
+  "started/started-ai": 0.5,
+  "google/gemini-3-flash-preview": 1,
+  "google/gemini-2.5-flash": 1,
+  "google/gemini-2.5-pro": 2,
+  "google/gemini-3-pro-preview": 2,
+  "openai/gpt-5-mini": 1.5,
+  "openai/gpt-5-nano": 0.75,
+  "openai/gpt-5": 3,
+  "openai/gpt-5.2": 3.5,
+  "anthropic/claude-3-5-haiku-latest": 2,
+  "anthropic/claude-sonnet-4": 4,
+  "anthropic/claude-opus-4": 6,
+};
+
+function resolveModel(model: string): string {
+  if (model === "started/started-ai") return "google/gemini-3-pro-preview";
+  return model;
+}
+
+function isAnthropicModel(model: string): boolean {
+  return model.startsWith("anthropic/");
+}
+
+// ─── Call Anthropic API (non-streaming, JSON mode) ───
+async function callAnthropicJSON(
+  model: string,
+  messages: Array<{ role: string; content: string }>
+): Promise<{ ok: boolean; status: number; content: string }> {
+  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
+
+  const anthropicModel = model.replace("anthropic/", "");
+  const systemMessages = messages.filter(m => m.role === "system");
+  const nonSystemMessages = messages.filter(m => m.role !== "system").map(m => ({
+    role: m.role === "assistant" ? "assistant" as const : "user" as const,
+    content: m.content,
+  }));
+
+  const systemText = systemMessages.map(m => m.content).join("\n\n");
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: anthropicModel,
+      max_tokens: 8192,
+      system: systemText,
+      messages: nonSystemMessages,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    return { ok: false, status: response.status, content: errText };
+  }
+
+  const data = await response.json();
+  const content = data.content?.[0]?.text || "{}";
+  return { ok: true, status: 200, content };
+}
+
+// ─── Call Lovable Gateway (non-streaming, JSON mode) ───
+async function callGatewayJSON(
+  model: string,
+  messages: Array<{ role: string; content: string }>
+): Promise<{ ok: boolean; status: number; content: string }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+
+  const response = await fetch(GATEWAY_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    return { ok: false, status: response.status, content: errText };
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || "{}";
+  return { ok: true, status: 200, content };
+}
+
+// ─── Unified AI call ───
+async function callAI(
+  model: string,
+  messages: Array<{ role: string; content: string }>
+): Promise<{ ok: boolean; status: number; content: string }> {
+  if (isAnthropicModel(model)) {
+    return callAnthropicJSON(model, messages);
+  }
+  const resolved = resolveModel(model);
+  return callGatewayJSON(resolved, messages);
+}
+
+// ─── Track usage with multiplier ───
+function trackUsage(userId: string, model: string, charCount: number) {
+  try {
+    const serviceClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const rawTokens = Math.ceil(charCount / 4);
+    const multiplier = MODEL_MULTIPLIERS[model] || 1;
+    const billedTokens = Math.ceil(rawTokens * multiplier);
+
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+    serviceClient.rpc("increment_usage", {
+      _owner_id: userId,
+      _period_start: periodStart,
+      _period_end: periodEnd,
+      _tokens: billedTokens,
+    }).then(() => {}).catch(() => {});
+  } catch { /* fail silently */ }
+}
 
 interface AgentRequest {
   goal: string;
@@ -65,15 +199,13 @@ async function getUser(req: Request) {
   return user;
 }
 
-// ─── Check concurrent run limit ───
 async function checkConcurrentRuns(userId: string, db: ReturnType<typeof createClient>): Promise<boolean> {
   const { count } = await db
     .from("agent_runs")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("status", "running");
-  
-  // Check plan limit
+
   const { data: ledger } = await db
     .from("api_usage_ledger")
     .select("plan_key")
@@ -93,38 +225,23 @@ async function checkConcurrentRuns(userId: string, db: ReturnType<typeof createC
   return (count || 0) < maxConcurrent;
 }
 
-// ─── Persist a step to DB ───
 async function persistStep(
   db: ReturnType<typeof createClient>,
-  runId: string,
-  stepIndex: number,
-  kind: string,
-  title: string,
-  input: unknown,
-  output: unknown,
-  status: string,
-  durationMs?: number
+  runId: string, stepIndex: number, kind: string, title: string,
+  input: unknown, output: unknown, status: string, durationMs?: number
 ) {
   try {
     await db.from("agent_steps").insert({
-      agent_run_id: runId,
-      step_index: stepIndex,
-      kind,
-      title,
-      input,
-      output,
-      status,
-      duration_ms: durationMs,
+      agent_run_id: runId, step_index: stepIndex, kind, title,
+      input, output, status, duration_ms: durationMs,
     });
-  } catch (e) {
-    console.error("Failed to persist step:", e);
-  }
+  } catch (e) { console.error("Failed to persist step:", e); }
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // ─── GET: Retrieve run status / resume info ───
+  // ─── GET: Retrieve run status ───
   if (req.method === "GET") {
     const url = new URL(req.url);
     const runId = url.searchParams.get("run_id");
@@ -159,7 +276,7 @@ serve(async (req) => {
   try {
     const body = await req.json() as AgentRequest;
     const { goal, project_id, files, history, maxIterations, preset_key, run_id, model, mcp_tools } = body;
-    const selectedModel = model || "google/gemini-3-flash-preview";
+    const selectedModel = model || "started/started-ai";
 
     if (!goal) {
       return new Response(
@@ -168,13 +285,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
     // ─── Auth ───
     const user = await getUser(req);
     const userId = user?.id;
-
     const db = getServiceClient();
 
     // ─── Concurrency check ───
@@ -193,7 +306,6 @@ serve(async (req) => {
     let startStep = 0;
 
     if (agentRunId) {
-      // Resume: get current step
       const { data: existingRun } = await db.from("agent_runs").select("current_step, status").eq("id", agentRunId).single();
       if (existingRun) {
         startStep = existingRun.current_step;
@@ -201,12 +313,8 @@ serve(async (req) => {
       }
     } else if (userId && project_id) {
       const { data: newRun } = await db.from("agent_runs").insert({
-        project_id,
-        user_id: userId,
-        preset_key: preset_key || null,
-        goal,
-        status: "running",
-        max_steps: Math.min(maxIterations || 8, 25),
+        project_id, user_id: userId, preset_key: preset_key || null,
+        goal, status: "running", max_steps: Math.min(maxIterations || 8, 25),
       }).select("id").single();
       agentRunId = newRun?.id;
     }
@@ -214,24 +322,18 @@ serve(async (req) => {
     const max = Math.min(maxIterations || 8, 25);
     const encoder = new TextEncoder();
 
-    // Build file context
-    const fileContext = (files || [])
-      .slice(0, 20)
-      .map((f) => `--- ${f.path} ---\n${f.content}`)
-      .join("\n\n");
+    const fileContext = (files || []).slice(0, 20)
+      .map((f) => `--- ${f.path} ---\n${f.content}`).join("\n\n");
 
     const conversationHistory: Array<{ role: string; content: string }> = [
       { role: "system", content: AGENT_SYSTEM_PROMPT },
     ];
 
-    // Inject MCP tool manifest if provided
     if (mcp_tools && Array.isArray(mcp_tools) && mcp_tools.length > 0) {
-      const toolList = mcp_tools.map((t: { server: string; name: string; description: string }) =>
-        `- [${t.server}] ${t.name}: ${t.description}`
-      ).join("\n");
+      const toolList = mcp_tools.map((t) => `- [${t.server}] ${t.name}: ${t.description}`).join("\n");
       conversationHistory.push({
         role: "system",
-        content: `Available MCP Tools:\n${toolList}\n\nYou can use these tools by setting action to "mcp_call" with fields: "mcp_server", "mcp_tool", and "mcp_input". Example:\n{"action":"mcp_call","mcp_server":"github","mcp_tool":"create_issue","mcp_input":{"title":"Bug fix"},"summary":"Creating issue"}`,
+        content: `Available MCP Tools:\n${toolList}\n\nYou can use these tools by setting action to "mcp_call" with fields: "mcp_server", "mcp_tool", and "mcp_input".`,
       });
     }
 
@@ -240,20 +342,18 @@ serve(async (req) => {
       ...(history || []),
     );
 
+    let totalChars = 0;
+
     const stream = new ReadableStream({
       async start(controller) {
         const sendEvent = (event: Record<string, unknown>) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         };
 
-        // Send run_id so client can track/resume
-        if (agentRunId) {
-          sendEvent({ type: "run_started", run_id: agentRunId });
-        }
+        if (agentRunId) sendEvent({ type: "run_started", run_id: agentRunId });
 
         try {
           for (let iteration = startStep + 1; iteration <= max; iteration++) {
-            // ─── Check for cancellation ───
             if (agentRunId) {
               const { data: runCheck } = await db.from("agent_runs").select("status").eq("id", agentRunId).single();
               if (runCheck?.status === "cancelled") {
@@ -263,44 +363,29 @@ serve(async (req) => {
             }
 
             const stepStartMs = Date.now();
-
             sendEvent({
               type: "step",
               step: { id: `step-${Date.now()}-think`, type: "think", label: `Iteration ${iteration}: Analyzing...`, status: "running" },
               iteration,
             });
 
-            // Call AI
-            const aiResponse = await fetch(AI_URL, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model: selectedModel,
-                messages: conversationHistory,
-                response_format: { type: "json_object" },
-              }),
-            });
+            // ─── Call AI (routed by provider) ───
+            const aiResult = await callAI(selectedModel, conversationHistory);
+            totalChars += conversationHistory.reduce((s, m) => s + (m.content?.length || 0), 0);
 
-            if (!aiResponse.ok) {
-              const errText = await aiResponse.text();
-              console.error("AI error:", aiResponse.status, errText);
+            if (!aiResult.ok) {
+              console.error("AI error:", aiResult.status, aiResult.content);
               const stepDuration = Date.now() - stepStartMs;
               if (agentRunId) {
-                await persistStep(db, agentRunId, iteration, "error", `AI error: ${aiResponse.status}`, {}, { error: errText.slice(0, 500) }, "error", stepDuration);
-                await db.from("agent_runs").update({ status: "failed", error_message: `AI error: ${aiResponse.status}`, current_step: iteration }).eq("id", agentRunId);
+                await persistStep(db, agentRunId, iteration, "error", `AI error: ${aiResult.status}`, {}, { error: aiResult.content.slice(0, 500) }, "error", stepDuration);
+                await db.from("agent_runs").update({ status: "failed", error_message: `AI error: ${aiResult.status}`, current_step: iteration }).eq("id", agentRunId);
               }
-              sendEvent({ type: "step", step: { id: `step-${Date.now()}-error`, type: "error", label: `AI error: ${aiResponse.status}`, detail: errText.slice(0, 200), status: "failed" }, iteration });
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-error`, type: "error", label: `AI error: ${aiResult.status}`, detail: aiResult.content.slice(0, 200), status: "failed" }, iteration });
               break;
             }
 
-            const aiData = await aiResponse.json();
-            const rawContent = aiData.choices?.[0]?.message?.content || "{}";
-
-            let parsed: {
-              thinking?: string; action?: string; patch?: string | null;
-              command?: string | null; summary?: string; done_reason?: string;
-            };
-
+            const rawContent = aiResult.content;
+            let parsed: Record<string, unknown>;
             try {
               parsed = JSON.parse(rawContent);
             } catch {
@@ -314,17 +399,15 @@ serve(async (req) => {
             }
 
             conversationHistory.push({ role: "assistant", content: rawContent });
-
             const stepDuration = Date.now() - stepStartMs;
 
-            // Update current_step
             if (agentRunId) {
               await db.from("agent_runs").update({ current_step: iteration }).eq("id", agentRunId);
             }
 
             sendEvent({
               type: "step",
-              step: { id: `step-${Date.now()}-think-done`, type: "think", label: `Thinking: ${parsed.summary || "Analyzing..."}`, detail: parsed.thinking?.slice(0, 300), status: "completed" },
+              step: { id: `step-${Date.now()}-think-done`, type: "think", label: `Thinking: ${parsed.summary || "Analyzing..."}`, detail: (parsed.thinking as string)?.slice(0, 300), status: "completed" },
               iteration,
             });
 
@@ -334,69 +417,59 @@ serve(async (req) => {
                 await persistStep(db, agentRunId, iteration, "done", "Goal completed", {}, { reason: parsed.done_reason }, "ok", stepDuration);
                 await db.from("agent_runs").update({ status: "done", current_step: iteration }).eq("id", agentRunId);
               }
-              sendEvent({ type: "step", step: { id: `step-${Date.now()}-done`, type: "done", label: "Goal completed", detail: parsed.done_reason || parsed.summary, status: "completed" }, iteration });
-              sendEvent({ type: "agent_done", reason: parsed.done_reason || parsed.summary });
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-done`, type: "done", label: "Goal completed", detail: (parsed.done_reason || parsed.summary) as string, status: "completed" }, iteration });
+              sendEvent({ type: "agent_done", reason: (parsed.done_reason || parsed.summary) as string });
               break;
             }
 
             if (parsed.action === "error") {
               if (agentRunId) {
                 await persistStep(db, agentRunId, iteration, "error", "Agent error", {}, { reason: parsed.summary }, "error", stepDuration);
-                await db.from("agent_runs").update({ status: "failed", error_message: parsed.summary, current_step: iteration }).eq("id", agentRunId);
+                await db.from("agent_runs").update({ status: "failed", error_message: parsed.summary as string, current_step: iteration }).eq("id", agentRunId);
               }
-              sendEvent({ type: "step", step: { id: `step-${Date.now()}-err`, type: "error", label: "Agent error", detail: parsed.summary, status: "failed" }, iteration });
-              sendEvent({ type: "agent_error", reason: parsed.summary });
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-err`, type: "error", label: "Agent error", detail: parsed.summary as string, status: "failed" }, iteration });
+              sendEvent({ type: "agent_error", reason: parsed.summary as string });
               break;
             }
 
             if (parsed.action === "patch" && parsed.patch) {
-              if (agentRunId) {
-                await persistStep(db, agentRunId, iteration, "patch", parsed.summary || "Generating patch", { diff: parsed.patch }, {}, "ok", stepDuration);
-              }
-              sendEvent({ type: "step", step: { id: `step-${Date.now()}-patch`, type: "patch", label: "Generating patch", detail: parsed.summary, status: "completed" }, iteration });
+              if (agentRunId) await persistStep(db, agentRunId, iteration, "patch", (parsed.summary || "Generating patch") as string, { diff: parsed.patch }, {}, "ok", stepDuration);
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-patch`, type: "patch", label: "Generating patch", detail: parsed.summary as string, status: "completed" }, iteration });
               sendEvent({ type: "patch", diff: parsed.patch, summary: parsed.summary });
               conversationHistory.push({ role: "user", content: "The patch was applied successfully. What should we do next? Run tests to verify?" });
             }
 
             if (parsed.action === "run_command" && parsed.command) {
-              if (agentRunId) {
-                await persistStep(db, agentRunId, iteration, "run", `Running: ${parsed.command}`, { command: parsed.command }, {}, "ok", stepDuration);
-              }
-              sendEvent({ type: "step", step: { id: `step-${Date.now()}-run`, type: "run", label: `Running: ${parsed.command}`, detail: parsed.command, status: "completed" }, iteration });
+              if (agentRunId) await persistStep(db, agentRunId, iteration, "run", `Running: ${parsed.command}`, { command: parsed.command }, {}, "ok", stepDuration);
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-run`, type: "run", label: `Running: ${parsed.command}`, detail: parsed.command as string, status: "completed" }, iteration });
               sendEvent({ type: "run_command", command: parsed.command, summary: parsed.summary });
               conversationHistory.push({ role: "user", content: `Command \`${parsed.command}\` executed successfully with exit code 0. Continue with next step.` });
             }
 
             if (parsed.action === "mcp_call" && parsed.mcp_tool) {
-              if (agentRunId) {
-                await persistStep(db, agentRunId, iteration, "mcp_call", `MCP: ${parsed.mcp_tool}`, { server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input }, {}, "ok", stepDuration);
-              }
-              sendEvent({ type: "step", step: { id: `step-${Date.now()}-mcp`, type: "mcp_call", label: `MCP: ${parsed.mcp_tool}`, detail: parsed.summary, status: "completed" }, iteration });
+              if (agentRunId) await persistStep(db, agentRunId, iteration, "mcp_call", `MCP: ${parsed.mcp_tool}`, { server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input }, {}, "ok", stepDuration);
+              sendEvent({ type: "step", step: { id: `step-${Date.now()}-mcp`, type: "mcp_call", label: `MCP: ${parsed.mcp_tool}`, detail: parsed.summary as string, status: "completed" }, iteration });
               sendEvent({ type: "mcp_call", server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input || {}, summary: parsed.summary });
               conversationHistory.push({ role: "user", content: `MCP tool \`${parsed.mcp_tool}\` was called. The result will be provided. Continue with next step.` });
             }
 
-            if (!["patch", "run_command", "done", "error", "mcp_call"].includes(parsed.action || "")) {
-              if (agentRunId) {
-                await persistStep(db, agentRunId, iteration, "think", parsed.summary || "Continuing", {}, {}, "ok", stepDuration);
-              }
+            if (!["patch", "run_command", "done", "error", "mcp_call"].includes(parsed.action as string || "")) {
+              if (agentRunId) await persistStep(db, agentRunId, iteration, "think", (parsed.summary || "Continuing") as string, {}, {}, "ok", stepDuration);
               conversationHistory.push({ role: "user", content: "Continue with the next step toward the goal." });
             }
 
             if (iteration === max) {
-              if (agentRunId) {
-                await db.from("agent_runs").update({ status: "done", current_step: iteration }).eq("id", agentRunId);
-              }
+              if (agentRunId) await db.from("agent_runs").update({ status: "done", current_step: iteration }).eq("id", agentRunId);
               sendEvent({ type: "step", step: { id: `step-${Date.now()}-maxiter`, type: "done", label: `Reached max iterations (${max})`, status: "completed" }, iteration });
               sendEvent({ type: "agent_done", reason: `Completed ${max} iterations` });
             }
           }
+
+          // Track usage at end
+          if (userId) trackUsage(userId, selectedModel, totalChars);
         } catch (e) {
           console.error("Agent loop error:", e);
-          if (agentRunId) {
-            await db.from("agent_runs").update({ status: "failed", error_message: e instanceof Error ? e.message : "Unknown" }).eq("id", agentRunId);
-          }
-          sendEvent({ type: "step", step: { id: `step-${Date.now()}-crash`, type: "error", label: "Agent crashed", detail: e instanceof Error ? e.message : "Unknown error", status: "failed" }, iteration: 0 });
+          if (agentRunId) await db.from("agent_runs").update({ status: "failed", error_message: e instanceof Error ? e.message : "Unknown" }).eq("id", agentRunId);
           sendEvent({ type: "agent_error", reason: e instanceof Error ? e.message : "Unknown" });
         }
 
