@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.mcp-asana]
 verify_jwt = false
+
+[functions.mcp-discord]
+verify_jwt = false

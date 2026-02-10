@@ -221,6 +221,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://app.asana.com/0/developer-console',
     generateLabel: 'Create a token in Asana Developer Console',
   },
+  'mcp-discord': {
+    storageKey: 'discord_bot_token',
+    label: 'Discord Bot Token',
+    placeholder: 'MTxxxxxxxxxxxxxxxxxxxxxxxx.Gxxxxxx.xxxxxxxxxx',
+    generateUrl: 'https://discord.com/developers/applications',
+    generateLabel: 'Create a bot in Discord Developer Portal',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -314,6 +321,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         hubspotToken: serverId === 'mcp-hubspot' ? token : undefined,
         mondayToken: serverId === 'mcp-monday' ? token : undefined,
         asanaToken: serverId === 'mcp-asana' ? token : undefined,
+        discordBotToken: serverId === 'mcp-discord' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

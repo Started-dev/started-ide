@@ -38,6 +38,7 @@ export interface MCPToolCallRequest {
   hubspotToken?: string;
   mondayToken?: string;
   asanaToken?: string;
+  discordBotToken?: string;
   serverId: string;
 }
 
@@ -98,6 +99,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
     case 'mcp-hubspot': body.hubspot_token = req.hubspotToken; break;
     case 'mcp-monday': body.monday_token = req.mondayToken; break;
     case 'mcp-asana': body.asana_token = req.asanaToken; break;
+    case 'mcp-discord': body.discord_bot_token = req.discordBotToken; break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 
