@@ -868,10 +868,13 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       .filter(f => !f.isFolder)
       .map(f => ({ path: f.path, content: f.content }));
 
+    const presetKey = localStorage.getItem('default_agent_preset') || undefined;
+
     streamAgent({
       goal,
       files: projectFiles,
       maxIterations: 10,
+      presetKey,
       signal: abortController.signal,
       onStep: (step, iteration) => {
         if (step.type === 'done') return;

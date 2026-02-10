@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { X, Circle } from 'lucide-react';
 import { useIDE } from '@/contexts/IDEContext';
@@ -6,6 +6,22 @@ import { useIDE } from '@/contexts/IDEContext';
 export function EditorPane() {
   const { openTabs, activeTabId, setActiveTab, closeTab, getFileById, updateFileContent, setSelectedText, theme } = useIDE();
   const editorRef = useRef<any>(null);
+  const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('editor_font_size')) || 14);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'editor_font_size' && e.newValue) setFontSize(Number(e.newValue));
+    };
+    const onCustom = (e: Event) => {
+      setFontSize((e as CustomEvent).detail);
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('editor_font_size_change', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('editor_font_size_change', onCustom);
+    };
+  }, []);
 
   const activeFile = activeTabId ? getFileById(activeTabId) : null;
 
@@ -70,7 +86,7 @@ export function EditorPane() {
             onChange={value => updateFileContent(activeFile.id, value || '')}
             onMount={handleEditorMount}
             options={{
-              fontSize: 13,
+              fontSize,
               fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
               minimap: { enabled: false },
               padding: { top: 12 },

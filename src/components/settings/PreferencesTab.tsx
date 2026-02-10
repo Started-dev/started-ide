@@ -31,6 +31,8 @@ export function PreferencesTab() {
     const v = value[0];
     setFontSize(v);
     localStorage.setItem('editor_font_size', String(v));
+    // Dispatch custom event so EditorPane updates in the same window
+    window.dispatchEvent(new CustomEvent('editor_font_size_change', { detail: v }));
   };
 
   const handlePresetChange = (value: string) => {

@@ -212,6 +212,7 @@ interface StreamAgentOptions {
   goal: string;
   files: Array<{ path: string; content: string }>;
   maxIterations?: number;
+  presetKey?: string;
   onStep: (step: AgentStepEvent, iteration: number) => void;
   onPatch: (diff: string, summary: string) => void;
   onRunCommand: (command: string, summary: string) => void;
@@ -221,7 +222,7 @@ interface StreamAgentOptions {
 }
 
 export async function streamAgent({
-  goal, files, maxIterations, onStep, onPatch, onRunCommand, onDone, onError, signal,
+  goal, files, maxIterations, presetKey, onStep, onPatch, onRunCommand, onDone, onError, signal,
 }: StreamAgentOptions) {
   const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
@@ -230,7 +231,7 @@ export async function streamAgent({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ goal, files, maxIterations }),
+    body: JSON.stringify({ goal, files, maxIterations, presetKey }),
     signal,
   });
 
