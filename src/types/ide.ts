@@ -42,6 +42,14 @@ export interface RunResult {
   timestamp: Date;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: Date;
+  projectId: string;
+}
+
 export interface Project {
   id: string;
   name: string;

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, AtSign, FileCode, AlertCircle, Brain } from 'lucide-react';
+import { Send, AtSign, FileCode, AlertCircle, Brain, Plus, X, MessageSquare } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { useIDE } from '@/contexts/IDEContext';
 import { ContextChip } from '@/types/ide';
@@ -14,6 +14,7 @@ export function ChatPanel() {
     toolCalls, pendingPatches, approveToolCall, denyToolCall, alwaysAllowTool, alwaysAllowCommand,
     applyPatch, applyPatchAndRun, cancelPatch,
     startAgent, setActiveRightPanel,
+    conversations, activeConversationId, switchConversation, newConversation, deleteConversation,
   } = useIDE();
   const [input, setInput] = useState('');
   const [chips, setChips] = useState<ContextChip[]>([]);
@@ -83,6 +84,44 @@ export function ChatPanel() {
           </span>
         )}
       </div>
+
+      {/* Conversation History Tabs */}
+      {conversations.length > 0 && (
+        <div className="flex items-center border-b border-border bg-muted/30 overflow-x-auto">
+          <div className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none">
+            {conversations.map(conv => (
+              <div
+                key={conv.id}
+                className={`group flex items-center gap-1 px-2.5 py-1.5 text-[11px] cursor-pointer border-r border-border/50 shrink-0 max-w-[140px] transition-colors ${
+                  activeConversationId === conv.id
+                    ? 'bg-card text-foreground border-b-2 border-b-primary'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                }`}
+                onClick={() => switchConversation(conv.id)}
+                title={conv.title}
+              >
+                <MessageSquare className="h-3 w-3 shrink-0" />
+                <span className="truncate">{conv.title}</span>
+                {conversations.length > 1 && (
+                  <button
+                    className="ml-auto p-0.5 rounded-sm hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    onClick={e => { e.stopPropagation(); deleteConversation(conv.id); }}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={newConversation}
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors shrink-0"
+            title="New conversation"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-auto px-3 py-3 space-y-4">
