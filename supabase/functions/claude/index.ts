@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are "Claude Code (Web IDE)" — an agentic coding assistant operating inside a project workspace.
+const SYSTEM_PROMPT = `You are "Started Code (Web IDE)" — an agentic coding assistant operating inside a project workspace.
 
 MISSION
 Ship correct, minimal, high-quality changes. Prefer small, verifiable edits. Always verify by running tests/linters/builds when available.
@@ -120,7 +120,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
-    console.error("claude function error:", e);
+    console.error("started function error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
