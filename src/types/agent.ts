@@ -101,10 +101,13 @@ export const BUILTIN_MCP_SERVERS: MCPServer[] = [
     requiresAuth: true,
     authConfigured: false,
     tools: [
-      { name: 'github_list_repos', description: 'List repositories', inputSchema: {} },
-      { name: 'github_get_file', description: 'Read file from repo', inputSchema: { path: { type: 'string' } } },
-      { name: 'github_create_pr', description: 'Create pull request', inputSchema: {} },
-      { name: 'github_list_issues', description: 'List issues', inputSchema: {} },
+      { name: 'github_list_repos', description: 'List your repositories', inputSchema: { per_page: { type: 'number' } } },
+      { name: 'github_get_repo', description: 'Get repository details', inputSchema: { owner: { type: 'string' }, repo: { type: 'string' } } },
+      { name: 'github_get_file', description: 'Read file from repo', inputSchema: { owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' } } },
+      { name: 'github_list_issues', description: 'List issues', inputSchema: { owner: { type: 'string' }, repo: { type: 'string' } } },
+      { name: 'github_create_issue', description: 'Create an issue', inputSchema: { owner: { type: 'string' }, repo: { type: 'string' }, title: { type: 'string' } } },
+      { name: 'github_create_pr', description: 'Create pull request', inputSchema: { owner: { type: 'string' }, repo: { type: 'string' }, title: { type: 'string' }, head: { type: 'string' }, base: { type: 'string' } } },
+      { name: 'github_list_branches', description: 'List branches', inputSchema: { owner: { type: 'string' }, repo: { type: 'string' } } },
     ],
   },
   {

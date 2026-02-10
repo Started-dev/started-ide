@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
@@ -10,6 +10,7 @@ import { AgentTimeline } from './AgentTimeline';
 import { MCPConfig } from './MCPConfig';
 import { HooksConfig } from './HooksConfig';
 import { useIDE } from '@/contexts/IDEContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function IDELayout() {
   const {
@@ -20,6 +21,7 @@ export function IDELayout() {
     mcpServers, toggleMCPServer,
     hooks, toggleHook, addHook, removeHook,
   } = useIDE();
+  const { signOut, user } = useAuth();
 
   const [showMCP, setShowMCP] = useState(false);
   const [showHooks, setShowHooks] = useState(false);
@@ -107,6 +109,13 @@ export function IDELayout() {
           >
             <Play className="h-3 w-3" />
             Run
+          </button>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title={`Sign out (${user?.email})`}
+          >
+            <LogOut className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={toggleTheme}
