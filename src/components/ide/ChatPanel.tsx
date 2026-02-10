@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, AtSign, FileCode, AlertCircle, Brain, Plus, X, MessageSquare, Globe, Image, Link } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import startedLogo from '@/assets/started-logo.png';
 import { useIDE } from '@/contexts/IDEContext';
 import { ContextChip } from '@/types/ide';
@@ -25,6 +28,7 @@ export function ChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeTabRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [chipDialog, setChipDialog] = useState<{ type: 'url' | 'web'; value: string } | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -48,18 +52,22 @@ export function ChatPanel() {
         setChips(prev => [...prev.filter(c => c.type !== 'errors'), { type: 'errors', label: 'Last Run Errors', content: lastRun.logs }]);
       }
     } else if (type === 'url') {
-      const url = prompt('Enter URL to fetch:');
-      if (url) {
-        setChips(prev => [...prev, { type: 'url', label: url.slice(0, 30), content: `[Fetch URL: ${url}]` }]);
-      }
+      setChipDialog({ type: 'url', value: '' });
     } else if (type === 'web') {
-      const query = prompt('Enter web search query:');
-      if (query) {
-        setChips(prev => [...prev, { type: 'web', label: query.slice(0, 30), content: `[Web Search: ${query}]` }]);
-      }
+      setChipDialog({ type: 'web', value: '' });
     } else if (type === 'image') {
       imageInputRef.current?.click();
     }
+  };
+
+  const confirmChipDialog = () => {
+    if (!chipDialog || !chipDialog.value.trim()) return;
+    if (chipDialog.type === 'url') {
+      setChips(prev => [...prev, { type: 'url', label: chipDialog.value.slice(0, 30), content: `[Fetch URL: ${chipDialog.value}]` }]);
+    } else {
+      setChips(prev => [...prev, { type: 'web', label: chipDialog.value.slice(0, 30), content: `[Web Search: ${chipDialog.value}]` }]);
+    }
+    setChipDialog(null);
   };
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -276,6 +284,35 @@ export function ChatPanel() {
           </button>
         </div>
       </div>
+
+      {/* @url / @web dialog */}
+      <Dialog open={!!chipDialog} onOpenChange={(v) => !v && setChipDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {chipDialog?.type === 'url' ? 'Fetch URL' : 'Web Search'}
+            </DialogTitle>
+            <DialogDescription>
+              {chipDialog?.type === 'url'
+                ? 'Enter a URL to fetch and include as context.'
+                : 'Enter a search query to find relevant information.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <Input
+              autoFocus
+              placeholder={chipDialog?.type === 'url' ? 'https://example.com' : 'Search query...'}
+              value={chipDialog?.value ?? ''}
+              onChange={(e) => setChipDialog(prev => prev ? { ...prev, value: e.target.value } : null)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmChipDialog(); }}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setChipDialog(null)}>Cancel</Button>
+              <Button size="sm" onClick={confirmChipDialog} disabled={!chipDialog?.value.trim()}>Add</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
