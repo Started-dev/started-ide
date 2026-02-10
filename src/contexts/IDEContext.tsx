@@ -10,6 +10,8 @@ import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractC
 import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectPersistence } from '@/hooks/use-project-persistence';
+import { useFileSnapshots } from '@/hooks/use-file-snapshots';
+import type { Snapshot } from '@/hooks/use-file-snapshots';
 
 const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
 
@@ -95,6 +97,12 @@ interface IDEContextType {
   // Panel
   activeRightPanel: 'chat' | 'agent';
   setActiveRightPanel: (panel: 'chat' | 'agent') => void;
+  // Snapshots
+  snapshots: Snapshot[];
+  snapshotsLoading: boolean;
+  loadSnapshots: () => void;
+  createSnapshot: (label?: string) => void;
+  restoreSnapshot: (snapshotId: string) => void;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -102,6 +110,7 @@ const IDEContext = createContext<IDEContextType | null>(null);
 export function IDEProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { projectId, loading: persistenceLoading, initialFiles, saveFile, deleteFileFromDB, saveAllFiles } = useProjectPersistence(user);
+  const { snapshots, loading: snapshotsLoading, loadSnapshots, createSnapshot: createSnapshotRaw, getSnapshotFiles } = useFileSnapshots(projectId);
 
   const [project, setProject] = useState<Project>({ id: 'demo-1', name: 'demo-project', runtimeType: 'node', files: [] });
   const runnerClientRef = useRef<IRunnerClient>(getRunnerClient());
@@ -612,6 +621,37 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setMcpServers(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
   }, []);
 
+  // ─── Snapshots ───
+
+  const createSnapshot = useCallback((label?: string) => {
+    createSnapshotRaw(files, label);
+  }, [files, createSnapshotRaw]);
+
+  const restoreSnapshot = useCallback(async (snapshotId: string) => {
+    const snapshotFiles = await getSnapshotFiles(snapshotId);
+    if (!snapshotFiles) return;
+
+    const { buildIDEFilesFromRows } = await import('@/hooks/use-project-persistence');
+    const ideFiles = buildIDEFilesFromRows(snapshotFiles);
+    setFiles(ideFiles);
+
+    // Also persist restored files to project_files
+    const fakeIDEFiles = snapshotFiles.map(f => ({
+      id: '', name: '', path: f.path, content: f.content, language: '', parentId: null, isFolder: false,
+    }));
+    saveAllFiles(fakeIDEFiles as any);
+
+    // Reset tabs
+    const firstFile = ideFiles.find(f => !f.isFolder);
+    if (firstFile) {
+      setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+      setActiveTabId(firstFile.id);
+    } else {
+      setOpenTabs([]);
+      setActiveTabId(null);
+    }
+  }, [getSnapshotFiles, saveAllFiles]);
+
   // Show loading while persistence initializes
   if (persistenceLoading) {
     return (
@@ -643,6 +683,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       hooks, toggleHook, addHook, removeHook,
       mcpServers, toggleMCPServer,
       activeRightPanel, setActiveRightPanel,
+      snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
     }}>
       {children}
     </IDEContext.Provider>
