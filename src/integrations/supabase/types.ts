@@ -14,7 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      file_snapshots: {
+        Row: {
+          created_at: string
+          files_json: Json
+          id: string
+          label: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          files_json?: Json
+          id?: string
+          label?: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          files_json?: Json
+          id?: string
+          label?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_files: {
+        Row: {
+          content: string
+          path: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string
+          path: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          path?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          runner_session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id: string
+          runner_session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          runner_session_id?: string | null
+        }
+        Relationships: []
+      }
+      runs: {
+        Row: {
+          command: string
+          created_at: string
+          exit_code: number | null
+          id: string
+          project_id: string
+          status: string
+          stderr: string | null
+          stdout: string | null
+          user_id: string
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          exit_code?: number | null
+          id?: string
+          project_id: string
+          status?: string
+          stderr?: string | null
+          stdout?: string | null
+          user_id: string
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          exit_code?: number | null
+          id?: string
+          project_id?: string
+          status?: string
+          stderr?: string | null
+          stdout?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
