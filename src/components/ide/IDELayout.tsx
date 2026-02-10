@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sparkles, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
@@ -10,6 +10,7 @@ import { AgentTimeline } from './AgentTimeline';
 import { MCPConfig } from './MCPConfig';
 import { HooksConfig } from './HooksConfig';
 import { SnapshotBrowser } from './SnapshotBrowser';
+import { ProjectSwitcher } from './ProjectSwitcher';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -22,12 +23,14 @@ export function IDELayout() {
     mcpServers, toggleMCPServer,
     hooks, toggleHook, addHook, removeHook,
     snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
+    projects, switchProject, createProject, renameProject, deleteProject,
   } = useIDE();
   const { signOut, user } = useAuth();
 
   const [showMCP, setShowMCP] = useState(false);
   const [showHooks, setShowHooks] = useState(false);
   const [showSnapshots, setShowSnapshots] = useState(false);
+  const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -71,8 +74,15 @@ export function IDELayout() {
             <Sparkles className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">Claude Code</span>
           </div>
-          <span className="text-xs text-muted-foreground">—</span>
-          <span className="text-xs text-muted-foreground font-mono">{project.name}</span>
+          <button
+            onClick={() => setShowProjectSwitcher(true)}
+            className="flex items-center gap-1 px-1.5 py-0.5 text-xs text-muted-foreground font-mono hover:text-foreground hover:bg-accent/50 rounded-sm transition-colors"
+            title="Switch project"
+          >
+            <FolderOpen className="h-3 w-3" />
+            {project.name}
+            <ChevronDown className="h-3 w-3" />
+          </button>
           {isAgentActive && (
             <span className="text-[10px] px-1.5 py-0.5 bg-ide-warning/15 text-ide-warning rounded-sm animate-pulse">
               Agent running
@@ -248,6 +258,17 @@ export function IDELayout() {
           onClose={() => setShowSnapshots(false)}
           onCreateSnapshot={(label) => createSnapshot(label)}
           onRestoreSnapshot={(id) => { restoreSnapshot(id); setShowSnapshots(false); }}
+        />
+      )}
+      {showProjectSwitcher && (
+        <ProjectSwitcher
+          projects={projects}
+          currentProjectId={project.id}
+          onSwitch={(id) => { switchProject(id); setShowProjectSwitcher(false); }}
+          onCreate={(name) => { createProject(name); setShowProjectSwitcher(false); }}
+          onRename={renameProject}
+          onDelete={deleteProject}
+          onClose={() => setShowProjectSwitcher(false)}
         />
       )}
     </div>

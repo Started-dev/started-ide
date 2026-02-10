@@ -10,6 +10,7 @@ import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractC
 import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectPersistence } from '@/hooks/use-project-persistence';
+import type { ProjectInfo } from '@/hooks/use-project-persistence';
 import { useFileSnapshots } from '@/hooks/use-file-snapshots';
 import type { Snapshot } from '@/hooks/use-file-snapshots';
 
@@ -103,13 +104,19 @@ interface IDEContextType {
   loadSnapshots: () => void;
   createSnapshot: (label?: string) => void;
   restoreSnapshot: (snapshotId: string) => void;
+  // Projects
+  projects: ProjectInfo[];
+  switchProject: (projectId: string) => void;
+  createProject: (name: string) => void;
+  renameProject: (projectId: string, name: string) => void;
+  deleteProject: (projectId: string) => void;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
 
 export function IDEProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const { projectId, loading: persistenceLoading, initialFiles, saveFile, deleteFileFromDB, saveAllFiles } = useProjectPersistence(user);
+  const { projectId, loading: persistenceLoading, initialFiles, projects, saveFile, deleteFileFromDB, saveAllFiles, switchProject: switchProjectRaw, createProject: createProjectRaw, renameProject: renameProjectRaw, deleteProject: deleteProjectRaw } = useProjectPersistence(user);
   const { snapshots, loading: snapshotsLoading, loadSnapshots, createSnapshot: createSnapshotRaw, getSnapshotFiles } = useFileSnapshots(projectId);
 
   const [project, setProject] = useState<Project>({ id: 'demo-1', name: 'demo-project', runtimeType: 'node', files: [] });
@@ -652,6 +659,31 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   }, [getSnapshotFiles, saveAllFiles]);
 
+  // ─── Project Switching ───
+
+  const switchProject = useCallback(async (targetProjectId: string) => {
+    await switchProjectRaw(targetProjectId);
+  }, [switchProjectRaw]);
+
+  const createProject = useCallback(async (name: string) => {
+    const newId = await createProjectRaw(name);
+    if (newId) {
+      // Seed new project with demo files
+      await switchProjectRaw(newId);
+    }
+  }, [createProjectRaw, switchProjectRaw]);
+
+  const renameProjectAction = useCallback(async (pid: string, name: string) => {
+    await renameProjectRaw(pid, name);
+    if (pid === projectId) {
+      setProject(prev => ({ ...prev, name }));
+    }
+  }, [renameProjectRaw, projectId]);
+
+  const deleteProjectAction = useCallback(async (pid: string) => {
+    await deleteProjectRaw(pid);
+  }, [deleteProjectRaw]);
+
   // Show loading while persistence initializes
   if (persistenceLoading) {
     return (
@@ -684,6 +716,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       mcpServers, toggleMCPServer,
       activeRightPanel, setActiveRightPanel,
       snapshots, snapshotsLoading, loadSnapshots, createSnapshot, restoreSnapshot,
+      projects, switchProject, createProject, renameProject: renameProjectAction, deleteProject: deleteProjectAction,
     }}>
       {children}
     </IDEContext.Provider>
