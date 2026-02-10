@@ -45,9 +45,9 @@ export default function Auth() {
     <div className="h-screen w-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-sm mx-4">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <img src={startedLogo} alt="Started" className="h-8 w-8 rounded-full" />
-          <span className="text-xl font-semibold text-foreground">Started</span>
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <img src={startedLogo} alt="Started" className="h-10 w-10 rounded-full" />
+          <span className="text-2xl font-semibold text-foreground">Started</span>
         </div>
 
         {signUpSuccess ? (
