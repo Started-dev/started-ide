@@ -207,6 +207,20 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     generateUrl: 'https://developers.hubspot.com/docs/api/private-apps',
     generateLabel: 'Create a private app on HubSpot',
   },
+  'mcp-monday': {
+    storageKey: 'monday_token',
+    label: 'Monday.com API Token',
+    placeholder: 'eyJhbGciOiJIUzI1NiJ9...',
+    generateUrl: 'https://monday.com/developers/v2/tokens',
+    generateLabel: 'Get API token from Monday.com',
+  },
+  'mcp-asana': {
+    storageKey: 'asana_token',
+    label: 'Asana Personal Access Token',
+    placeholder: '1/xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://app.asana.com/0/developer-console',
+    generateLabel: 'Create a token in Asana Developer Console',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -298,6 +312,8 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         sfAccessToken: serverId === 'mcp-salesforce' ? token : undefined,
         sfInstanceUrl: serverId === 'mcp-salesforce' ? secondaryVal : undefined,
         hubspotToken: serverId === 'mcp-hubspot' ? token : undefined,
+        mondayToken: serverId === 'mcp-monday' ? token : undefined,
+        asanaToken: serverId === 'mcp-asana' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;

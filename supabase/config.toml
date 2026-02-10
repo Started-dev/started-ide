@@ -98,3 +98,9 @@ verify_jwt = false
 
 [functions.mcp-hubspot]
 verify_jwt = false
+
+[functions.mcp-monday]
+verify_jwt = false
+
+[functions.mcp-asana]
+verify_jwt = false
