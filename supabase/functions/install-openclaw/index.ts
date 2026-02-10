@@ -37,8 +37,15 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Support _method override since supabase.functions.invoke always sends POST
+    let body: Record<string, unknown> = {};
     if (req.method === "POST") {
-      const { llm_key, project_id } = await req.json();
+      try { body = await req.json(); } catch { body = {}; }
+    }
+    const effectiveMethod = (body._method as string)?.toUpperCase() || req.method;
+
+    if (effectiveMethod === "POST") {
+      const { llm_key, project_id } = body;
 
       if (!llm_key || !project_id) {
         return new Response(
@@ -121,9 +128,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (req.method === "GET") {
+    if (effectiveMethod === "GET") {
       const url = new URL(req.url);
-      const installId = url.searchParams.get("install_id");
+      const installId = url.searchParams.get("install_id") || (body.install_id as string) || null;
 
       if (!installId) {
         // List installations for user

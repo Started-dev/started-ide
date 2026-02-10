@@ -97,11 +97,6 @@ function InstallWizard({ projectId, onConnected }: { projectId: string; onConnec
 
   const pollStatus = useCallback(async (id: string) => {
     try {
-      const res = await supabase.functions.invoke('install-openclaw', {
-        body: null,
-        headers: {},
-      });
-      // Use GET via query params workaround — invoke as function with GET-like body
       const { data } = await supabase.functions.invoke('install-openclaw', {
         body: { _method: 'GET', install_id: id },
       });
