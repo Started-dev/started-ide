@@ -1043,6 +1043,19 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     }
   }, [deleteProjectRaw, projects, switchProjectRaw]);
 
+  // ─── Onboarding goal: auto-send first message if set ───
+  const onboardingGoalSent = useRef(false);
+  useEffect(() => {
+    if (onboardingGoalSent.current || persistenceLoading || !filesReady) return;
+    const goal = sessionStorage.getItem('started_onboarding_goal');
+    if (goal) {
+      onboardingGoalSent.current = true;
+      sessionStorage.removeItem('started_onboarding_goal');
+      // Small delay to let the UI render first
+      setTimeout(() => sendMessage(goal), 500);
+    }
+  }, [persistenceLoading, filesReady, sendMessage]);
+
   if (persistenceLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
