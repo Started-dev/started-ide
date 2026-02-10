@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -35,10 +36,12 @@ interface UsageLedger {
 export default function UserSettings() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<TabId>('billing');
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [usage, setUsage] = useState<UsageLedger | null>(null);
   const [loading, setLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -56,6 +59,47 @@ export default function UserSettings() {
     };
     load();
   }, [user]);
+
+  // Handle checkout success redirect
+  useEffect(() => {
+    const checkoutStatus = searchParams.get('checkout');
+    const plan = searchParams.get('plan');
+    if (checkoutStatus === 'success' && plan) {
+      toast.success(`Successfully upgraded to ${plan} plan!`);
+      // Clear query params
+      setSearchParams({});
+      // Refresh usage data
+      if (user) {
+        supabase.from('api_usage_ledger').select('*').eq('owner_id', user.id)
+          .order('period_start', { ascending: false }).limit(1)
+          .then(({ data }) => {
+            if (data && data.length > 0) setUsage(data[0] as unknown as UsageLedger);
+          });
+      }
+    } else if (checkoutStatus === 'cancelled') {
+      toast.info('Checkout was cancelled.');
+      setSearchParams({});
+    }
+  }, [searchParams, user, setSearchParams]);
+
+  const handleUpgrade = async (planKey: string) => {
+    setCheckoutLoading(planKey);
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+        body: { action: 'create_checkout', plan_key: planKey },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data?.error || 'Failed to create checkout session');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Checkout failed');
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
 
   const currentPlanKey = usage?.plan_key ?? 'free';
   const currentPlan = plans.find(p => p.key === currentPlanKey);
@@ -116,6 +160,8 @@ export default function UserSettings() {
               usage={usage}
               currentPlan={currentPlan ?? null}
               currentPlanKey={currentPlanKey}
+              onUpgrade={handleUpgrade}
+              checkoutLoading={checkoutLoading}
             />
           )}
         </div>
@@ -177,11 +223,15 @@ function BillingTab({
   usage,
   currentPlan,
   currentPlanKey,
+  onUpgrade,
+  checkoutLoading,
 }: {
   plans: BillingPlan[];
   usage: UsageLedger | null;
   currentPlan: BillingPlan | null;
   currentPlanKey: string;
+  onUpgrade: (planKey: string) => void;
+  checkoutLoading: string | null;
 }) {
   const usageMeters = currentPlan ? [
     {
@@ -328,8 +378,16 @@ function BillingTab({
                   <Button size="sm" variant="outline" disabled className="w-full text-xs">
                     Current Plan
                   </Button>
-                ) : (
-                  <Button size="sm" className="w-full text-xs">
+                ) : plan.monthly_price_usd === 0 ? null : (
+                  <Button
+                    size="sm"
+                    className="w-full text-xs"
+                    disabled={checkoutLoading === plan.key}
+                    onClick={() => onUpgrade(plan.key)}
+                  >
+                    {checkoutLoading === plan.key ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : null}
                     {plan.monthly_price_usd > (plans.find(p => p.key === currentPlanKey)?.monthly_price_usd ?? 0)
                       ? 'Upgrade'
                       : 'Switch'}
