@@ -8,6 +8,8 @@ import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage } from '@/lib/patch-utils';
 import { streamChat, runCommandRemote, streamAgent } from '@/lib/api-client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProjectPersistence } from '@/hooks/use-project-persistence';
 
 const CLAUDE_MD_CONTENT = `# Project Brief (CLAUDE.md)
 
@@ -98,9 +100,13 @@ interface IDEContextType {
 const IDEContext = createContext<IDEContextType | null>(null);
 
 export function IDEProvider({ children }: { children: React.ReactNode }) {
-  const [project] = useState<Project>({ id: 'demo-1', name: 'demo-project', runtimeType: 'node', files: [] });
+  const { user } = useAuth();
+  const { projectId, loading: persistenceLoading, initialFiles, saveFile, deleteFileFromDB, saveAllFiles } = useProjectPersistence(user);
+
+  const [project, setProject] = useState<Project>({ id: 'demo-1', name: 'demo-project', runtimeType: 'node', files: [] });
   const runnerClientRef = useRef<IRunnerClient>(getRunnerClient());
   const [runnerSession, setRunnerSession] = useState<RunnerSession | null>(null);
+  const [filesReady, setFilesReady] = useState(false);
   const [files, setFiles] = useState<IDEFile[]>(DEMO_FILES);
   const [openTabs, setOpenTabs] = useState<OpenTab[]>([
     { fileId: 'f-main', name: 'main.ts', path: '/src/main.ts', isModified: false },
@@ -143,6 +149,32 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // ─── Persistence: Load from DB or seed demo files ───
+  useEffect(() => {
+    if (persistenceLoading) return;
+
+    if (projectId) {
+      setProject(prev => ({ ...prev, id: projectId }));
+    }
+
+    if (initialFiles && initialFiles.length > 0) {
+      // Loaded from DB
+      setFiles(initialFiles);
+      const firstFile = initialFiles.find(f => !f.isFolder);
+      if (firstFile) {
+        setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+        setActiveTabId(firstFile.id);
+      } else {
+        setOpenTabs([]);
+        setActiveTabId(null);
+      }
+    } else if (projectId && !initialFiles) {
+      // No files in DB — seed with demo files
+      saveAllFiles(DEMO_FILES);
+    }
+    setFilesReady(true);
+  }, [persistenceLoading, projectId, initialFiles, saveAllFiles]);
+
   const getFileById = useCallback((id: string) => files.find(f => f.id === id), [files]);
 
   const openFile = useCallback((fileId: string) => {
@@ -165,9 +197,15 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   }, [activeTabId]);
 
   const updateFileContent = useCallback((fileId: string, content: string) => {
-    setFiles(prev => prev.map(f => f.id === fileId ? { ...f, content } : f));
+    setFiles(prev => {
+      const file = prev.find(f => f.id === fileId);
+      if (file && !file.isFolder) {
+        saveFile(file.path, content);
+      }
+      return prev.map(f => f.id === fileId ? { ...f, content } : f);
+    });
     setOpenTabs(prev => prev.map(t => t.fileId === fileId ? { ...t, isModified: true } : t));
-  }, []);
+  }, [saveFile]);
 
   const createFile = useCallback((name: string, parentId: string | null, isFolder: boolean) => {
     const parent = parentId ? files.find(f => f.id === parentId) : null;
@@ -184,13 +222,22 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       language: langMap[ext] || 'plaintext', parentId, isFolder,
     };
     setFiles(prev => [...prev, newFile]);
-    if (!isFolder) openFile(newFile.id);
-  }, [files, openFile]);
+    if (!isFolder) {
+      openFile(newFile.id);
+      saveFile(path, '');
+    }
+  }, [files, openFile, saveFile]);
 
   const deleteFile = useCallback((fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (file && !file.isFolder) {
+      deleteFileFromDB(file.path);
+    }
+    // Also delete children files from DB
+    files.filter(f => f.parentId === fileId && !f.isFolder).forEach(f => deleteFileFromDB(f.path));
     setFiles(prev => prev.filter(f => f.id !== fileId && f.parentId !== fileId));
     closeTab(fileId);
-  }, [closeTab]);
+  }, [closeTab, files, deleteFileFromDB]);
 
   const renameFile = useCallback((fileId: string, newName: string) => {
     setFiles(prev => prev.map(f => {
@@ -564,6 +611,17 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const toggleMCPServer = useCallback((id: string) => {
     setMcpServers(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s));
   }, []);
+
+  // Show loading while persistence initializes
+  if (persistenceLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <div className="text-2xl font-mono text-muted-foreground animate-pulse">Loading project...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <IDEContext.Provider value={{
