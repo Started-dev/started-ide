@@ -41,6 +41,7 @@ export interface MCPToolCallRequest {
   discordBotToken?: string;
   trelloApiKey?: string;
   trelloToken?: string;
+  sendgridApiKey?: string;
   serverId: string;
 }
 
@@ -106,6 +107,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       body.trello_api_key = req.trelloApiKey;
       body.trello_token = req.trelloToken;
       break;
+    case 'mcp-sendgrid': body.sendgrid_api_key = req.sendgridApiKey; break;
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 

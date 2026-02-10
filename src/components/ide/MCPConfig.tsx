@@ -238,6 +238,13 @@ const TOKEN_CONFIG: Record<string, { storageKey: string; label: string; placehol
     secondaryLabel: 'Trello Token',
     secondaryPlaceholder: 'ATTA...',
   },
+  'mcp-sendgrid': {
+    storageKey: 'sendgrid_api_key',
+    label: 'SendGrid API Key',
+    placeholder: 'SG.xxxxxxxxxxxxxxxxxxxx',
+    generateUrl: 'https://app.sendgrid.com/settings/api_keys',
+    generateLabel: 'Create an API key on SendGrid',
+  },
 };
 
 export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) {
@@ -334,6 +341,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         discordBotToken: serverId === 'mcp-discord' ? token : undefined,
         trelloApiKey: serverId === 'mcp-trello' ? token : undefined,
         trelloToken: serverId === 'mcp-trello' ? secondaryVal : undefined,
+        sendgridApiKey: serverId === 'mcp-sendgrid' ? token : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
