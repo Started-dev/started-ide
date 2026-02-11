@@ -148,3 +148,15 @@
 .monaco-editor .monaco-editor-background {
   background-color: hsl(var(--ide-panel-bg)) !important;
 }
+
+@property --nav-border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes nav-border-rotate {
+  to {
+    --nav-border-angle: 360deg;
+  }
+}
