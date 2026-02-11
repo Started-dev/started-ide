@@ -151,7 +151,7 @@ function HeroBackground({ mouseX, mouseY }: { mouseX: number; mouseY: number }) 
         className="absolute inset-0 pointer-events-none"
         style={{
           background: `radial-gradient(400px circle at ${mouseX}px ${mouseY}px, hsl(38 92% 50% / 0.03), transparent 80%)`,
-          transition: "background 0.3s ease-out",
+          transition: "background 0.6s cubic-bezier(0.25, 0.1, 0.25, 1)",
         }}
       />
 
