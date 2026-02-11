@@ -48,7 +48,7 @@ export default function Auth() {
       {/* ── Top Nav ── */}
       <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-5">
         <div className="flex items-center">
-          <img src={startedWordmark} alt="Started" className="h-8" />
+          <img src={startedWordmark} alt="Started" className="h-10" />
         </div>
         <div className="flex items-center gap-6">
           <a
