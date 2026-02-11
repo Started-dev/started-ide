@@ -56,19 +56,19 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
         <ChevronDown className="h-2.5 w-2.5" />
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 mb-0 z-50 bg-popover border border-border rounded-md shadow-lg min-w-[240px] py-1">
+        <div className="absolute bottom-full left-0 mb-1 z-50 bg-popover border border-border rounded-md shadow-lg min-w-[260px] max-h-[320px] overflow-y-auto py-1">
           {AVAILABLE_MODELS.map(m => (
             <button
               key={m.id}
               onClick={() => { onChange(m.id); setOpen(false); }}
-              className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-accent transition-colors ${
+              className={`w-full text-left px-3 py-1.5 text-[11px] hover:bg-accent transition-colors flex items-center gap-1.5 ${
                 m.id === value ? 'bg-primary/10 text-primary' : 'text-foreground'
               }`}
             >
-              <span className="font-medium">{m.label}</span>
-              {m.id === 'started/started-ai' && <span className="ml-1 text-[9px] px-1 py-0.5 bg-primary/15 text-primary rounded-sm font-semibold">default</span>}
-              <span className={`ml-1.5 text-[9px] px-1 py-0.5 rounded-sm ${PROVIDER_COLORS[m.provider] || ''}`}>{m.provider}</span>
-              <span className="ml-1 text-muted-foreground">— {m.desc}</span>
+              <span className="font-medium shrink-0">{m.label}</span>
+              {m.id === 'started/started-ai' && <span className="text-[9px] px-1 py-0.5 bg-primary/15 text-primary rounded-sm font-semibold shrink-0">default</span>}
+              <span className={`text-[9px] px-1 py-0.5 rounded-sm shrink-0 ${PROVIDER_COLORS[m.provider] || ''}`}>{m.provider}</span>
+              <span className="text-muted-foreground truncate">— {m.desc}</span>
             </button>
           ))}
         </div>
