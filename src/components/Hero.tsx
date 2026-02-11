@@ -1,21 +1,24 @@
 import { motion } from "framer-motion";
 import ideScreenshot from "@/assets/ide-screenshot-real.png";
-
 type HeroProps = {
   onCtaPrimary?: () => void;
 };
-
-export default function Hero({ onCtaPrimary }: HeroProps) {
-  return (
-    <section className="relative w-full min-h-screen flex flex-col justify-center overflow-hidden bg-background">
+export default function Hero({
+  onCtaPrimary
+}: HeroProps) {
+  return <section className="relative w-full min-h-screen flex flex-col justify-center overflow-hidden bg-background">
       <div className="relative z-10 w-full max-w-[1100px] mx-auto px-8 lg:px-16 py-20">
         {/* Text block — left aligned */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className="flex flex-col items-start gap-6"
-        >
+        <motion.div initial={{
+        opacity: 0,
+        y: 20
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        duration: 0.7,
+        ease: "easeOut"
+      }} className="flex flex-col items-start gap-6">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-medium tracking-tight text-white leading-[1.08]">
             Ship real s<span className="font-mono text-[hsl(38,92%,50%)]">ø</span>ftware<span className="text-[hsl(38,92%,50%)]">.</span>
           </h1>
@@ -24,10 +27,7 @@ export default function Hero({ onCtaPrimary }: HeroProps) {
             Started is y<span className="font-mono">ø</span>ur AI engineer.
           </p>
 
-          <button
-            onClick={onCtaPrimary}
-            className="mt-2 h-11 px-7 text-sm font-medium rounded-lg bg-white text-[#0d0d0f] hover:opacity-90 transition-opacity duration-200 inline-flex items-center gap-2 w-full sm:w-auto justify-center"
-          >
+          <button onClick={onCtaPrimary} className="mt-2 h-11 px-7 text-sm font-medium rounded-lg bg-white text-[#0d0d0f] hover:opacity-90 transition-opacity duration-200 inline-flex items-center gap-2 w-full sm:w-auto justify-center">
             Get Started
             <span>→</span>
           </button>
@@ -38,12 +38,17 @@ export default function Hero({ onCtaPrimary }: HeroProps) {
         </motion.div>
 
         {/* IDE Screenshot */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-          className="mt-20 sm:mt-28 mx-auto w-full max-w-[1100px]"
-        >
+        <motion.div initial={{
+        opacity: 0,
+        y: 30
+      }} animate={{
+        opacity: 1,
+        y: 0
+      }} transition={{
+        duration: 0.8,
+        delay: 0.3,
+        ease: "easeOut"
+      }} className="mt-20 sm:mt-28 mx-auto w-full max-w-[1100px]">
           <div className="rounded-xl border border-[hsl(38,92%,50%,0.15)] bg-[#131316] shadow-[0_12px_60px_rgba(0,0,0,0.6)] overflow-hidden">
             {/* Title bar */}
             <div className="flex items-center px-4 py-3 border-b border-white/[0.06]">
@@ -59,23 +64,14 @@ export default function Hero({ onCtaPrimary }: HeroProps) {
             </div>
 
             {/* Screenshot */}
-            <img
-              src={ideScreenshot}
-              alt="Started IDE — AI-powered development environment"
-              className="w-full h-auto block"
-              loading="eager"
-            />
+            <img src={ideScreenshot} alt="Started IDE — AI-powered development environment" className="w-full h-auto block object-cover" loading="eager" />
           </div>
         </motion.div>
       </div>
 
       {/* Subtle radial orange glow behind IDE */}
-      <div
-        className="absolute bottom-[10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] pointer-events-none"
-        style={{
-          background: "radial-gradient(ellipse at center, hsl(38 92% 50% / 0.03) 0%, transparent 70%)",
-        }}
-      />
-    </section>
-  );
+      <div className="absolute bottom-[10%] left-1/2 -translate-x-1/2 w-[800px] h-[400px] pointer-events-none" style={{
+      background: "radial-gradient(ellipse at center, hsl(38 92% 50% / 0.03) 0%, transparent 70%)"
+    }} />
+    </section>;
 }
