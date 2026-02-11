@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
-import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User, Shield, Rocket, Cloud, Download } from 'lucide-react';
+import { Play, MessageSquare, Terminal, Command, Sun, Moon, BookOpen, Brain, Plug, Anchor, LogOut, Clock, FolderOpen, ChevronDown, Users, Zap, User, Shield, Rocket, Cloud, Download, Activity, Globe2 } from 'lucide-react';
 import startedLogo from '@/assets/started-logo.png';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
@@ -20,6 +20,8 @@ import { PermissionRulesManager } from './PermissionRulesManager';
 import { CICDPanel } from './CICDPanel';
 import { OpenClawPanel } from './OpenClawPanel';
 import { Web3Modal } from './Web3Modal';
+import { EventTimeline } from './EventTimeline';
+import { ProtocolZone } from './ProtocolZone';
 import { InstallModal } from './InstallModal';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -246,7 +248,7 @@ export function IDELayout() {
           >
             <Terminal className="h-3.5 w-3.5" />
           </button>
-          {/* Chat / Agent tab switcher */}
+          {/* Chat / Agent / Timeline / Protocol tab switcher */}
           <div className="flex items-center border border-border rounded-sm overflow-hidden ml-1">
             <button
               onClick={() => { if (!showChat) toggleChat(); setActiveRightPanel('chat'); }}
@@ -269,6 +271,28 @@ export function IDELayout() {
               title="Agent Timeline"
             >
               <Brain className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { if (!showChat) toggleChat(); setActiveRightPanel('timeline' as any); }}
+              className={`p-1.5 transition-colors ${
+                showChat && (activeRightPanel as string) === 'timeline'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50'
+              }`}
+              title="Event Timeline"
+            >
+              <Activity className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => { if (!showChat) toggleChat(); setActiveRightPanel('protocol' as any); }}
+              className={`p-1.5 transition-colors ${
+                showChat && (activeRightPanel as string) === 'protocol'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50'
+              }`}
+              title="Protocol Zone"
+            >
+              <Globe2 className="h-3.5 w-3.5" />
             </button>
           </div>
           <button
@@ -307,6 +331,10 @@ export function IDELayout() {
               <Panel defaultSize={30} minSize={20} maxSize={45}>
                 {activeRightPanel === 'chat' ? (
                   <ChatPanel />
+                ) : (activeRightPanel as string) === 'timeline' ? (
+                  <EventTimeline />
+                ) : (activeRightPanel as string) === 'protocol' ? (
+                  <ProtocolZone />
                 ) : (
                   <AgentTimeline
                     agentRun={agentRun}

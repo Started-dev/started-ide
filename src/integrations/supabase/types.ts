@@ -216,6 +216,302 @@ export type Database = {
         }
         Relationships: []
       }
+      build_attestations: {
+        Row: {
+          artifacts_hashes: Json
+          attestation_hash: string
+          build_run_id: string
+          command_hash: string
+          created_at: string
+          id: string
+          logs_hashes: Json
+          runner_fingerprint: Json
+          snapshot_hash: string
+        }
+        Insert: {
+          artifacts_hashes?: Json
+          attestation_hash: string
+          build_run_id: string
+          command_hash: string
+          created_at?: string
+          id?: string
+          logs_hashes?: Json
+          runner_fingerprint?: Json
+          snapshot_hash: string
+        }
+        Update: {
+          artifacts_hashes?: Json
+          attestation_hash?: string
+          build_run_id?: string
+          command_hash?: string
+          created_at?: string
+          id?: string
+          logs_hashes?: Json
+          runner_fingerprint?: Json
+          snapshot_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "build_attestations_build_run_id_fkey"
+            columns: ["build_run_id"]
+            isOneToOne: true
+            referencedRelation: "build_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      build_runs: {
+        Row: {
+          command: string
+          created_at: string
+          duration_ms: number | null
+          exit_code: number | null
+          finished_at: string | null
+          id: string
+          input_snapshot_id: string | null
+          output_snapshot_id: string | null
+          project_id: string
+          runner_node_id: string | null
+          started_at: string | null
+          status: string
+          stderr_trunc: string | null
+          stdout_trunc: string | null
+          user_id: string | null
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          duration_ms?: number | null
+          exit_code?: number | null
+          finished_at?: string | null
+          id?: string
+          input_snapshot_id?: string | null
+          output_snapshot_id?: string | null
+          project_id: string
+          runner_node_id?: string | null
+          started_at?: string | null
+          status?: string
+          stderr_trunc?: string | null
+          stdout_trunc?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          duration_ms?: number | null
+          exit_code?: number | null
+          finished_at?: string | null
+          id?: string
+          input_snapshot_id?: string | null
+          output_snapshot_id?: string | null
+          project_id?: string
+          runner_node_id?: string | null
+          started_at?: string | null
+          status?: string
+          stderr_trunc?: string | null
+          stdout_trunc?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "build_runs_input_snapshot_id_fkey"
+            columns: ["input_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "ca_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "build_runs_output_snapshot_id_fkey"
+            columns: ["output_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "ca_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "build_runs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ca_blobs: {
+        Row: {
+          byte_size: number
+          content: string
+          created_at: string
+          hash: string
+        }
+        Insert: {
+          byte_size: number
+          content: string
+          created_at?: string
+          hash: string
+        }
+        Update: {
+          byte_size?: number
+          content?: string
+          created_at?: string
+          hash?: string
+        }
+        Relationships: []
+      }
+      ca_path_index: {
+        Row: {
+          blob_hash: string
+          path: string
+          project_id: string
+          snapshot_id: string
+        }
+        Insert: {
+          blob_hash: string
+          path: string
+          project_id: string
+          snapshot_id: string
+        }
+        Update: {
+          blob_hash?: string
+          path?: string
+          project_id?: string
+          snapshot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ca_path_index_blob_hash_fkey"
+            columns: ["blob_hash"]
+            isOneToOne: false
+            referencedRelation: "ca_blobs"
+            referencedColumns: ["hash"]
+          },
+          {
+            foreignKeyName: "ca_path_index_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ca_path_index_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "ca_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ca_refs: {
+        Row: {
+          id: string
+          project_id: string
+          ref_name: string
+          snapshot_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          ref_name: string
+          snapshot_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          ref_name?: string
+          snapshot_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ca_refs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ca_refs_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "ca_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ca_snapshots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          parent_snapshot_id: string | null
+          project_id: string
+          root_tree_hash: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          parent_snapshot_id?: string | null
+          project_id: string
+          root_tree_hash: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          parent_snapshot_id?: string | null
+          project_id?: string
+          root_tree_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ca_snapshots_parent_snapshot_id_fkey"
+            columns: ["parent_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "ca_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ca_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ca_snapshots_root_tree_hash_fkey"
+            columns: ["root_tree_hash"]
+            isOneToOne: false
+            referencedRelation: "ca_trees"
+            referencedColumns: ["hash"]
+          },
+        ]
+      }
+      ca_trees: {
+        Row: {
+          created_at: string
+          entries: Json
+          hash: string
+        }
+        Insert: {
+          created_at?: string
+          entries?: Json
+          hash: string
+        }
+        Update: {
+          created_at?: string
+          entries?: Json
+          hash?: string
+        }
+        Relationships: []
+      }
       collab_messages: {
         Row: {
           content: string
@@ -728,6 +1024,44 @@ export type Database = {
           },
         ]
       }
+      project_events: {
+        Row: {
+          actor_id: string | null
+          actor_type: string
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          project_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_type: string
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          project_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          actor_type?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_files: {
         Row: {
           content: string
@@ -942,6 +1276,90 @@ export type Database = {
           runner_session_id?: string | null
         }
         Relationships: []
+      }
+      runner_nodes: {
+        Row: {
+          base_url: string
+          capabilities: Json
+          created_at: string
+          id: string
+          last_heartbeat: string | null
+          name: string
+          pricing: Json
+          region: string | null
+          status: string
+          trust_tier: string
+        }
+        Insert: {
+          base_url: string
+          capabilities?: Json
+          created_at?: string
+          id?: string
+          last_heartbeat?: string | null
+          name: string
+          pricing?: Json
+          region?: string | null
+          status?: string
+          trust_tier?: string
+        }
+        Update: {
+          base_url?: string
+          capabilities?: Json
+          created_at?: string
+          id?: string
+          last_heartbeat?: string | null
+          name?: string
+          pricing?: Json
+          region?: string | null
+          status?: string
+          trust_tier?: string
+        }
+        Relationships: []
+      }
+      runner_sessions: {
+        Row: {
+          created_at: string
+          cwd: string | null
+          id: string
+          project_id: string
+          remote_session_id: string
+          runner_node_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cwd?: string | null
+          id?: string
+          project_id: string
+          remote_session_id: string
+          runner_node_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cwd?: string | null
+          id?: string
+          project_id?: string
+          remote_session_id?: string
+          runner_node_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "runner_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "runner_sessions_runner_node_id_fkey"
+            columns: ["runner_node_id"]
+            isOneToOne: false
+            referencedRelation: "runner_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       runs: {
         Row: {
