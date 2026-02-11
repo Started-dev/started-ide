@@ -1,6 +1,4 @@
 import * as React from "react";
-import { motion } from "framer-motion";
-
 type HeroProps = {
   title?: string;
   subtitle?: string;
@@ -10,8 +8,6 @@ type HeroProps = {
   ctaSecondaryHref?: string;
   badgeText?: string;
 };
-
-const ORANGE = "#F5A623";
 
 export default function Hero({
   title = "Ship production software\nwith AI agents.",
@@ -146,28 +142,6 @@ function HeroBackground() {
         }}
       />
 
-      {/* Diagonal beam */}
-      <motion.div
-        className="absolute"
-        style={{
-          width: "200%",
-          height: 1,
-          top: "45%",
-          left: "-50%",
-          background: `linear-gradient(90deg, transparent 0%, ${ORANGE}15 30%, ${ORANGE}25 50%, ${ORANGE}15 70%, transparent 100%)`,
-          transform: "rotate(-6deg)",
-        }}
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-      />
-
-      {/* Pipeline SVG overlay */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-[0.12] pointer-events-none">
-        <svg viewBox="0 0 1000 500" className="w-full h-full max-w-5xl" preserveAspectRatio="xMidYMid meet">
-          <Pipeline />
-        </svg>
-      </div>
-
       {/* Bottom fade */}
       <div
         className="absolute bottom-0 left-0 right-0 h-32"
@@ -176,79 +150,5 @@ function HeroBackground() {
         }}
       />
     </div>
-  );
-}
-
-function Pipeline() {
-  const nodes = [
-    { x: 170, y: 310, label: "Intent" },
-    { x: 330, y: 270, label: "Plan" },
-    { x: 500, y: 310, label: "Patch" },
-    { x: 670, y: 270, label: "Verify" },
-    { x: 830, y: 310, label: "Deploy" },
-  ];
-
-  const d = `M ${nodes[0].x} ${nodes[0].y}
-             C 240 250, 280 250, ${nodes[1].x} ${nodes[1].y}
-             S 430 350, ${nodes[2].x} ${nodes[2].y}
-             S 610 250, ${nodes[3].x} ${nodes[3].y}
-             S 770 350, ${nodes[4].x} ${nodes[4].y}`;
-
-  return (
-    <>
-      {/* Faint arcs */}
-      <g opacity="0.15">
-        <ellipse cx="500" cy="300" rx="350" ry="120" fill="none" stroke={ORANGE} strokeWidth="0.5" strokeDasharray="4 8" />
-        <ellipse cx="500" cy="300" rx="250" ry="80" fill="none" stroke={ORANGE} strokeWidth="0.3" strokeDasharray="2 6" />
-      </g>
-
-      {/* Main pipeline path */}
-      <path d={d} fill="none" stroke={ORANGE} strokeWidth="1.5" opacity="0.4" />
-
-      {/* Animated pulse */}
-      <motion.circle r="4" fill={ORANGE} opacity="0.8">
-        <animateMotion dur="4s" repeatCount="indefinite" path={d} />
-      </motion.circle>
-
-      {/* Nodes */}
-      {nodes.map((n, i) => (
-        <g key={i}>
-          <circle cx={n.x} cy={n.y} r="12" fill="none" stroke={ORANGE} strokeWidth="0.8" opacity="0.5" />
-          <circle cx={n.x} cy={n.y} r="4" fill={ORANGE} opacity="0.7" />
-          <motion.circle
-            cx={n.x}
-            cy={n.y}
-            r="8"
-            fill={ORANGE}
-            opacity={0}
-            animate={{ opacity: [0, 0.4, 0], r: [8, 16, 8] }}
-            transition={{
-              duration: 2.5,
-              repeat: Infinity,
-              delay: i * 0.5,
-              ease: "easeInOut",
-            }}
-          />
-          <text x={n.x} y={n.y + 28} textAnchor="middle" fontSize="9" fill={ORANGE} opacity="0.5" fontFamily="monospace" letterSpacing="0.1em">
-            {n.label.toUpperCase()}
-          </text>
-        </g>
-      ))}
-
-      {/* Attestation stamps */}
-      <Stamp x={400} y={220} label="HASH" />
-      <Stamp x={750} y={220} label="ATTEST" />
-    </>
-  );
-}
-
-function Stamp({ x, y, label }: { x: number; y: number; label: string }) {
-  return (
-    <g opacity="0.3">
-      <rect x={x - 22} y={y - 8} width="44" height="16" rx="3" fill="none" stroke={ORANGE} strokeWidth="0.8" strokeDasharray="2 2" />
-      <text x={x} y={y + 4} textAnchor="middle" fontSize="7" fill={ORANGE} fontFamily="monospace" letterSpacing="0.15em">
-        {label}
-      </text>
-    </g>
   );
 }
