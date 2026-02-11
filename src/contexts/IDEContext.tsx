@@ -9,7 +9,7 @@ import { STARTED_SYSTEM_PROMPT } from '@/lib/started-prompt';
 import { evaluatePermission, executeToolLocally } from '@/lib/tool-executor';
 import { getRunnerClient, IRunnerClient } from '@/lib/runner-client';
 import { parseUnifiedDiff, applyPatchToContent, extractDiffFromMessage, extractCommandsFromMessage, extractFileBlocksFromMessage } from '@/lib/patch-utils';
-import { streamChat, runCommandRemote, streamAgent, PermissionRequest } from '@/lib/api-client';
+import { streamChat, runCommandRemote, streamAgent, getAgentRunStatus, cancelAgentRun, PermissionRequest } from '@/lib/api-client';
 import { generateChatTitle } from '@/lib/chat-title';
 import { triggerEventHooks, isDeployCommand, isErrorExit } from '@/lib/event-hooks';
 import { detectRuntime } from '@/lib/detect-runtime';
@@ -348,6 +348,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   // Agent state
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
   const agentAbortRef = useRef(false);
+  const agentServerRunIdRef = useRef<string | null>(null);
 
   // ─── filesRef: always-current files for async callbacks ───
   const filesRef = useRef(files);
@@ -406,8 +407,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setLocalConversations([newConv]);
       convPersistence.createConversation(newConv);
     }
-    setAgentRun(null);
-    setActiveRightPanel('chat');
+    // Don't clear agentRun on project load — agent runs independently
+    setActiveRightPanel(agentRun?.status === 'running' ? 'agent' : 'chat');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, convPersistence.loading, convPersistence.conversations]);
 
@@ -436,7 +437,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (target) {
       setChatMessages(target.messages);
       setActiveConversationId(conversationId);
-      setAgentRun(null);
+      // Don't clear agentRun — it runs independently
       setActiveRightPanel('chat');
     }
   }, [activeConversationId, chatMessages, convPersistence, mergedConversations]);
@@ -452,7 +453,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     setLocalConversations(prev => [...prev, newConv]);
     setActiveConversationId(newConv.id);
     setChatMessages(newConv.messages);
-    setAgentRun(null);
+    // Don't clear agentRun — it runs independently
     setActiveRightPanel('chat');
     // Persist to DB (fire and forget)
     convPersistence.createConversation(newConv);
@@ -868,17 +869,20 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       contextParts.unshift(`[STARTED.md — Project Brief]\n${startedMd.content}`);
     }
 
-    // ─── Inject project file tree ───
+    // ─── Inject project file tree (paths only, lightweight) ───
     const nonFolderFiles = currentFiles.filter(f => !f.isFolder);
     if (nonFolderFiles.length > 0) {
       const fileTree = nonFolderFiles.map(f => f.path).sort().join('\n');
       contextParts.push(`[Project Files]\n${fileTree}`);
     }
 
-    // ─── Inject active file contents ───
+    // ─── Inject active file contents (truncated to avoid bloat) ───
     const activeFileObj = currentFiles.find(f => f.id === activeTabId && !f.isFolder);
     if (activeFileObj && activeFileObj.content) {
-      contextParts.push(`[Active File: ${activeFileObj.path}]\n${activeFileObj.content}`);
+      const truncated = activeFileObj.content.length > 8000
+        ? activeFileObj.content.slice(0, 8000) + '\n... (truncated)'
+        : activeFileObj.content;
+      contextParts.push(`[Active File: ${activeFileObj.path}]\n${truncated}`);
     }
 
     if (chips) {
@@ -1203,6 +1207,11 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       model: selectedModel,
       mcpTools: enabledMcpTools.length > 0 ? enabledMcpTools : undefined,
       signal: abortController.signal,
+      onRunStarted: (runId) => {
+        agentServerRunIdRef.current = runId;
+        localStorage.setItem('agent_active_run_id', runId);
+        setAgentRun(prev => prev ? { ...prev, id: runId } : null);
+      },
       onStep: (step, iteration) => {
         if (step.type === 'done') return;
         addStep({
@@ -1268,6 +1277,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
           completedAt: new Date(),
         });
         setAgentRun(prev => prev ? { ...prev, status: 'completed', completedAt: new Date() } : null);
+        localStorage.removeItem('agent_active_run_id');
+        agentServerRunIdRef.current = null;
       },
       onMCPCall: (server, tool, input) => {
         addStep({
@@ -1292,6 +1303,8 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
           completedAt: new Date(),
         });
         setAgentRun(prev => prev ? { ...prev, status: 'failed', completedAt: new Date() } : null);
+        localStorage.removeItem('agent_active_run_id');
+        agentServerRunIdRef.current = null;
       },
     });
 
@@ -1302,6 +1315,13 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     agentAbortRef.current = true;
     const ctrl = (window as any).__agentAbortController as AbortController | undefined;
     if (ctrl) ctrl.abort();
+    // Cancel server-side too
+    const serverRunId = agentServerRunIdRef.current;
+    if (serverRunId) {
+      cancelAgentRun(serverRunId).catch(() => {});
+      localStorage.removeItem('agent_active_run_id');
+      agentServerRunIdRef.current = null;
+    }
     setAgentRun(prev => prev ? { ...prev, status: 'cancelled', completedAt: new Date() } : null);
   }, []);
 
@@ -1309,7 +1329,60 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     agentAbortRef.current = true;
     const ctrl = (window as any).__agentAbortController as AbortController | undefined;
     if (ctrl) ctrl.abort();
+    // Cancel server-side too (pause = cancel on server, can resume later)
+    const serverRunId = agentServerRunIdRef.current;
+    if (serverRunId) {
+      cancelAgentRun(serverRunId).catch(() => {});
+    }
     setAgentRun(prev => prev ? { ...prev, status: 'paused' } : null);
+  }, []);
+
+  // ─── Agent Reconnection: poll for running agent on mount/refresh ───
+  useEffect(() => {
+    const savedRunId = localStorage.getItem('agent_active_run_id');
+    if (!savedRunId || agentRun) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await getAgentRunStatus(savedRunId);
+        if (cancelled) return;
+        if (!status.run) {
+          localStorage.removeItem('agent_active_run_id');
+          return;
+        }
+        const steps: AgentStep[] = (status.steps || []).map(s => ({
+          id: s.id,
+          type: s.kind as AgentStep['type'],
+          label: s.title,
+          status: s.status === 'ok' ? 'completed' as const : s.status === 'error' ? 'failed' as const : 'completed' as const,
+          durationMs: s.duration_ms ?? undefined,
+          startedAt: new Date(),
+          completedAt: new Date(),
+        }));
+        const isRunning = status.run.status === 'running';
+        setAgentRun({
+          id: savedRunId,
+          goal: status.run.goal,
+          status: isRunning ? 'running' : status.run.status === 'done' ? 'completed' : status.run.status === 'failed' ? 'failed' : 'completed',
+          steps,
+          iteration: status.run.current_step,
+          maxIterations: status.run.max_steps,
+          startedAt: new Date(status.run.created_at),
+          completedAt: isRunning ? undefined : new Date(),
+        });
+        agentServerRunIdRef.current = savedRunId;
+        setActiveRightPanel('agent');
+        if (!isRunning) {
+          localStorage.removeItem('agent_active_run_id');
+        }
+      } catch {
+        localStorage.removeItem('agent_active_run_id');
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Hooks (delegated to useProjectHooks) ───

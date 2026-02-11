@@ -185,7 +185,7 @@ const MODEL_MULTIPLIERS: Record<string, number> = {
 };
 
 function resolveModel(model: string): string {
-  if (model === "started/started-ai") return "google/gemini-3-pro-preview";
+  if (model === "started/started-ai") return "google/gemini-3-flash-preview";
   return model;
 }
 
