@@ -69,15 +69,7 @@ export default function Auth() {
       </nav>
 
       {/* ── Hero ── */}
-      <Hero
-        title={"Ship production software\nwith AI agents."}
-        subtitle="Plan, generate, verify, and deploy real applications — inside a live AI-native development environment."
-        ctaPrimaryLabel="Get Started"
-        onCtaPrimary={() => { setShowAuth(true); setIsSignUp(true); }}
-        ctaSecondaryLabel="View Documentation"
-        ctaSecondaryHref="https://docs.started.dev"
-        badgeText="Now in Public Beta"
-      />
+      <Hero onCtaPrimary={() => { setShowAuth(true); setIsSignUp(true); }} />
 
       {/* ── Auth Modal Overlay ── */}
       {showAuth && (
