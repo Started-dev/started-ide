@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import startedLogo from '@/assets/started-logo.png';
+import ideScreenshot from '@/assets/ide-screenshot.png';
 
 const FLOATING_CHARS = [
   { char: '{', top: '8%', left: '12%', size: 'text-2xl', delay: '0s' },
@@ -219,24 +220,7 @@ export default function Auth() {
               started.dev — IDE
             </span>
           </div>
-          {/* Content area — mini IDE preview */}
-          <div className="p-4 space-y-2 font-mono text-[11px] leading-relaxed text-muted-foreground/80 min-h-[180px]">
-            <p>
-              <span className="text-primary">const</span> app ={' '}
-              <span className="text-primary">createApp</span>
-              <span className="text-foreground/60">()</span>;
-            </p>
-            <p>
-              <span className="text-primary">await</span> app.
-              <span className="text-primary">deploy</span>
-              <span className="text-foreground/60">(</span>
-              <span className="text-ide-success">'production'</span>
-              <span className="text-foreground/60">)</span>;
-            </p>
-            <p className="text-ide-success">✓ Build succeeded — 1.2 s</p>
-            <p className="text-ide-success">✓ Deployed to edge (48 regions)</p>
-            <p className="mt-3 text-foreground/40">▌</p>
-          </div>
+          <img src={ideScreenshot} alt="Started IDE preview" className="w-full" />
         </div>
       </div>
     </div>
