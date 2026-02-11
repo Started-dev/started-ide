@@ -1,26 +1,101 @@
 
 
-## Plan: Navbar Glass Cleanup, Remove Tag, and Stylized "o" Characters
+# Documentation Site for Started.dev
 
-### 1. Optimize the Glass Navbar
-The current navbar uses `backdrop-blur-xl` and a `before:` pseudo-element gradient overlay which can cause rendering artifacts (patching/quality issues) on some browsers. The fix:
-- Replace `backdrop-blur-xl` with `backdrop-blur-md` (lighter blur, fewer artifacts)
-- Remove the `before:` pseudo-element gradient entirely (the main source of layering/patching issues)
-- Keep the subtle border, shadow, and semi-transparent background for the glass feel
-- Result: cleaner glass effect with better rendering performance
+## Overview
 
-### 2. Remove "Deterministic build runtime" Tag
-Delete the second `<span>` inside the micro-labels section of `Hero.tsx` that displays "Deterministic build runtime".
+Build a GitBook-style documentation experience as a new `/docs` route within the existing React/Vite application, reusing the app's design system (dark theme, orange accent, Inter/JetBrains Mono fonts, sidebar tokens).
 
-### 3. Stylized "o" with Slash (ø) in Hero Headline
-Replace all lowercase "o" characters in the hero headline text with the Unicode character "ø" (o-with-slash), rendered in a monospace font to give a code/terminal aesthetic. This will be done by modifying the `renderTitleWithAccent` function to post-process each text span, wrapping every "o" in a `<span className="font-mono">ø</span>`. The "AI agents" accent span will also receive this treatment.
+**Important**: The request mentions Next.js, but this project is React + Vite. The docs will be built within the existing stack using React Router, which achieves the same result.
 
-### Technical Details
+## Architecture
 
-**File: `src/pages/Auth.tsx`** (line 49)
-- Simplify the `<nav>` className: remove `before:*` classes, change `backdrop-blur-xl` to `backdrop-blur-md`
+The docs system will use a JSON/TypeScript-based content model (not MDX, since this is Vite, not Next.js). Each doc page is a structured object with markdown-like content rendered by custom components.
 
-**File: `src/components/Hero.tsx`**
-- Lines 38-41: Remove the "Deterministic build runtime" span entirely
-- Lines 78-100: Update `renderTitleWithAccent` to replace "o" characters with a monospace-styled "ø" character in all rendered text spans
+```text
+/docs                    --> Docs layout with sidebar + content
+/docs/:section           --> Section page (e.g., /docs/introduction)
+/docs/:section/:subsection --> Subsection (e.g., /docs/architecture/storage-zone)
+```
+
+## File Structure
+
+```text
+src/
+  pages/
+    Docs.tsx                    # Main docs page with layout
+  components/docs/
+    DocsLayout.tsx              # 3-column layout (sidebar, content, TOC)
+    DocsSidebar.tsx             # Left navigation with collapsible sections
+    DocsContent.tsx             # Main content renderer
+    DocsTOC.tsx                 # Right "On This Page" table of contents
+    DocsSearch.tsx              # Cmd+K search overlay
+    DocsNav.tsx                 # Top breadcrumb + navigation bar
+    DocsPrevNext.tsx            # Previous/Next page navigation
+    DocsCallout.tsx             # Note, Warning, Tip, Danger callouts
+    DocsCodeBlock.tsx           # Syntax-highlighted code with copy button
+    DocsScrollProgress.tsx      # Subtle scroll progress indicator
+  data/
+    docs-content.ts             # All documentation content structured as data
+    docs-navigation.ts          # Navigation tree definition
+```
+
+## Layout Design
+
+- **Left Sidebar** (~260px): Collapsible sections using existing Sidebar UI components, active section highlighting, scrollable
+- **Main Content** (centered, max-w-3xl): Rendered doc content with proper heading hierarchy, code blocks, callouts
+- **Right TOC** (~200px, hidden on mobile): "On This Page" floating links with active scroll tracking
+- **Top Bar**: Breadcrumbs + search trigger + dark/light toggle
+- **Bottom**: Previous/Next navigation links
+
+## Styling Approach
+
+All components will use the existing design tokens:
+- `bg-background`, `bg-card`, `bg-sidebar` for surfaces
+- `text-foreground`, `text-muted-foreground` for text
+- `border-border`, `border-sidebar-border` for borders
+- `text-primary` (orange) for active states and accents
+- `font-mono` for code elements
+- Same scrollbar styling, same spacing patterns
+
+## Content Sections (12 pages)
+
+1. **Introduction** - Overview of Started.dev
+2. **Architecture** (with subsections: Storage Zone, Compute Zone, Networking Zone, Proof Zone)
+3. **Snapshots and Merkle Model** - Content-addressed storage
+4. **Runner Mesh** - Distributed compute
+5. **MCP Integrations** - Model Context Protocol servers
+6. **Agent Mode** - Autonomous execution
+7. **Build Attestations** - Verifiable builds
+8. **API Reference** - Edge function APIs
+9. **NBA Policy** - Never-Build-Alone policy engine
+10. **Ship Mode** - Deployment workflow
+11. **Security Model** - Permissions and safety
+12. **FAQ** - Common questions
+
+Each page will have coherent placeholder content relevant to the actual app features.
+
+## Core Features
+
+- **Syntax highlighting**: Custom CSS-based highlighting for TypeScript/JSON code blocks (no heavy dependency)
+- **Copy-to-clipboard**: Button on every code block
+- **Callout blocks**: Note (blue), Warning (orange), Tip (green), Danger (red) with icons
+- **Cmd+K search**: Overlay that filters all doc pages by title and content keywords
+- **Scroll progress**: Thin orange bar at the top of the content area
+- **Active TOC tracking**: IntersectionObserver to highlight the current heading
+- **Anchor links**: Click heading to copy link, hash-based navigation
+- **Mobile responsive**: Sidebar becomes a sheet/drawer, TOC hidden, full-width content
+
+## Technical Details
+
+- Add `/docs/*` route to `App.tsx` (public, no auth required)
+- Use `useParams` and `useLocation` for doc routing
+- Scroll tracking via `IntersectionObserver`
+- Search uses simple client-side filtering
+- Framer Motion for subtle page transitions
+- Reuse existing UI primitives: `ScrollArea`, `Sheet`, `Button`, `Separator`, `Collapsible`
+
+## New Dependencies
+
+None required. All built with existing packages (React Router, Framer Motion, Lucide icons, Radix UI primitives).
 
