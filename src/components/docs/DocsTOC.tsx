@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import type { DocHeading } from "@/data/docs-content";
 
@@ -10,15 +10,24 @@ export function DocsTOC({ headings }: DocsTOCProps) {
   const [activeId, setActiveId] = useState<string>("");
 
   useEffect(() => {
+    const container = document.getElementById("docs-content-area");
+    if (!container || headings.length === 0) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
-          }
+        // Find the topmost visible heading
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length > 0) {
+          // Pick the one closest to the top
+          visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          setActiveId(visible[0].target.id);
         }
       },
-      { rootMargin: "-80px 0px -60% 0px", threshold: 0.1 }
+      {
+        root: container,
+        rootMargin: "-48px 0px -70% 0px",
+        threshold: 0,
+      }
     );
 
     for (const h of headings) {
@@ -28,22 +37,26 @@ export function DocsTOC({ headings }: DocsTOCProps) {
     return () => observer.disconnect();
   }, [headings]);
 
+  const scrollTo = useCallback((id: string) => {
+    const container = document.getElementById("docs-content-area");
+    const el = document.getElementById(id);
+    if (!container || !el) return;
+    const top = el.offsetTop - 64;
+    container.scrollTo({ top, behavior: "smooth" });
+  }, []);
+
   if (headings.length === 0) return null;
 
   return (
-    <nav className="hidden xl:block w-52 shrink-0 sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto">
+    <nav className="hidden xl:block w-52 shrink-0 sticky top-10 self-start max-h-[calc(100vh-8rem)]">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">On This Page</p>
       <ul className="space-y-1.5 border-l border-border">
         {headings.map((h) => (
           <li key={h.id}>
-            <a
-              href={`#${h.id}`}
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById(h.id)?.scrollIntoView({ behavior: "smooth" });
-              }}
+            <button
+              onClick={() => scrollTo(h.id)}
               className={cn(
-                "block text-xs leading-relaxed py-0.5 transition-colors border-l-2 -ml-px",
+                "block text-left text-xs leading-relaxed py-0.5 transition-colors border-l-2 -ml-px w-full",
                 h.level === 3 ? "pl-6" : "pl-3",
                 activeId === h.id
                   ? "border-primary text-primary font-medium"
@@ -51,7 +64,7 @@ export function DocsTOC({ headings }: DocsTOCProps) {
               )}
             >
               {h.title}
-            </a>
+            </button>
           </li>
         ))}
       </ul>

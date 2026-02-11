@@ -24,7 +24,7 @@ export function DocsLayout() {
   if (!page) return <Navigate to="/docs/introduction" replace />;
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <DocsNav onSearchOpen={() => setSearchOpen(true)} onMenuOpen={() => setMenuOpen(true)} />
       <DocsScrollProgress />
       <DocsSearch open={searchOpen} onOpenChange={setSearchOpen} />
@@ -36,14 +36,14 @@ export function DocsLayout() {
         </SheetContent>
       </Sheet>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:block w-64 shrink-0 border-r border-border bg-sidebar sticky top-12 h-[calc(100vh-3rem)]">
+        <aside className="hidden lg:block w-64 shrink-0 border-r border-border bg-sidebar overflow-y-auto">
           <DocsSidebar />
         </aside>
 
-        {/* Main content area */}
-        <div id="docs-content-area" className="flex-1 overflow-y-auto h-[calc(100vh-3rem)]">
+        {/* Main content area — the ONLY scrollable region */}
+        <main id="docs-content-area" className="flex-1 overflow-y-auto">
           <div className="flex gap-8 px-6 md:px-10 py-10 max-w-6xl mx-auto">
             <DocsContent page={page} />
             <DocsTOC headings={page.headings} />
@@ -61,7 +61,7 @@ export function DocsLayout() {
               </div>
             </div>
           </footer>
-        </div>
+        </main>
       </div>
     </div>
   );
