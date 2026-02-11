@@ -1,40 +1,28 @@
 
 
-# Fix: MoltBot Install — Component Disappears
+# Add GitHub OAuth Secrets
 
-## Root Cause
+## What's Needed
 
-In `IntegrationsPanel.tsx` (line 157), the `onOpenOpenClaw` callback passed to `InstallModal` is an empty no-op:
+Two secrets must be added to the backend so the `github-oauth` edge function can authenticate with GitHub:
 
-```typescript
-onOpenOpenClaw={() => { /* handled by install modal */ }}
-```
+1. **GITHUB_CLIENT_ID** -- Your OAuth App's Client ID
+2. **GITHUB_CLIENT_SECRET** -- Your OAuth App's Client Secret
 
-When you click "OpenClaw / MoltBot" in the Install Services modal:
-1. `onClose()` fires -- closes the InstallModal
-2. `onOpenOpenClaw()` fires -- does nothing
+## Steps
 
-Result: both dialogs close, nothing opens. The component "disappears."
+### 1. Add `GITHUB_CLIENT_ID` secret
+- Store the Client ID as a backend secret named `GITHUB_CLIENT_ID`
 
-## Fix
+### 2. Add `GITHUB_CLIENT_SECRET` secret
+- Store the Client Secret as a backend secret named `GITHUB_CLIENT_SECRET`
 
-Add a new sub-panel state value `'openclaw'` and wire it up:
+### 3. Verify the fix
+- After secrets are set, test the "Connect with GitHub" button in the IDE
+- The `github-oauth` edge function should now return a valid `client_id` instead of an empty string
+- The OAuth popup should redirect to GitHub's authorization page
 
-### `src/components/ide/IntegrationsPanel.tsx`
+## Important Notes
+- Make sure your GitHub OAuth App's callback URL is set to: `https://started.lovable.app/auth/github/callback`
+- No code changes are needed -- the `github-oauth` edge function already reads these environment variables
 
-1. Add `'openclaw'` to the `SubPanel` type union
-2. Import `OpenClawPanel`
-3. Add a render branch: when `subPanel === 'openclaw'`, render `<OpenClawPanel onClose={() => setSubPanel(null)} />`
-4. Change the `onOpenOpenClaw` prop from `() => {}` to `() => setSubPanel('openclaw')`
-
-### Technical Detail
-
-```text
-Before:
-  User clicks MoltBot -> onClose() + onOpenOpenClaw() (no-op) -> nothing
-
-After:
-  User clicks MoltBot -> onClose() + onOpenOpenClaw() -> setSubPanel('openclaw') -> OpenClawPanel renders
-```
-
-This is a 4-line fix in a single file.
