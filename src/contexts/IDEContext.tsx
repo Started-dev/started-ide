@@ -20,6 +20,7 @@ import { useConversationPersistence } from '@/hooks/use-conversation-persistence
 import type { ProjectInfo } from '@/hooks/use-project-persistence';
 import { useFileSnapshots } from '@/hooks/use-file-snapshots';
 import type { Snapshot } from '@/hooks/use-file-snapshots';
+import { useCASnapshots } from '@/hooks/use-ca-snapshots';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import type { Collaborator, CollabMessage, FileLock, PresenceUser } from '@/hooks/use-collaboration';
 
@@ -308,6 +309,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { projectId, loading: persistenceLoading, initialFiles, projects, saveFile, deleteFileFromDB, saveAllFiles, switchProject: switchProjectRaw, createProject: createProjectRaw, renameProject: renameProjectRaw, deleteProject: deleteProjectRaw } = useProjectPersistence(user);
   const { snapshots, loading: snapshotsLoading, loadSnapshots, createSnapshot: createSnapshotRaw, getSnapshotFiles } = useFileSnapshots(projectId);
+  const caSnapshots = useCASnapshots(projectId);
   const collab = useCollaboration(projectId, user?.id || null, user?.email || null);
   const convPersistence = useConversationPersistence(projectId, user);
   const isProjectOwner = !!user && projects.some(p => p.id === projectId);
@@ -482,7 +484,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // ─── Persistence: Load from DB or seed demo files ───
+  // ─── Persistence: Load from CA snapshots first, fallback to DB, or seed demo ───
   useEffect(() => {
     if (persistenceLoading) return;
 
@@ -491,29 +493,57 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setProject(prev => ({ ...prev, id: projectId, name: projectInfo?.name || prev.name }));
     }
 
-    if (initialFiles && initialFiles.length > 0) {
-      setFiles(initialFiles);
-      const firstFile = initialFiles.find(f => !f.isFolder);
-      if (firstFile) {
-        setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
-        setActiveTabId(firstFile.id);
-      } else {
-        setOpenTabs([]);
-        setActiveTabId(null);
+    // Try content-addressed snapshot checkout first
+    let cancelled = false;
+    (async () => {
+      if (!projectId) return;
+      const caFiles = await caSnapshots.checkoutMain();
+      if (cancelled) return;
+
+      if (caFiles && caFiles.length > 0) {
+        setFiles(caFiles);
+        const firstFile = caFiles.find(f => !f.isFolder);
+        if (firstFile) {
+          setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+          setActiveTabId(firstFile.id);
+        } else {
+          setOpenTabs([]);
+          setActiveTabId(null);
+        }
+        setFilesReady(true);
+        return;
       }
-    } else if (projectId && !initialFiles) {
-      setFiles(DEMO_FILES);
-      saveAllFiles(DEMO_FILES);
-      const firstFile = DEMO_FILES.find(f => !f.isFolder);
-      if (firstFile) {
-        setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
-        setActiveTabId(firstFile.id);
-      } else {
-        setOpenTabs([]);
-        setActiveTabId(null);
+
+      // Fallback to project_files table
+      if (initialFiles && initialFiles.length > 0) {
+        setFiles(initialFiles);
+        // Seed the CA snapshot model with existing files
+        caSnapshots.createCASnapshot(initialFiles, 'Initial migration from project_files');
+        const firstFile = initialFiles.find(f => !f.isFolder);
+        if (firstFile) {
+          setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+          setActiveTabId(firstFile.id);
+        } else {
+          setOpenTabs([]);
+          setActiveTabId(null);
+        }
+      } else if (projectId && !initialFiles) {
+        setFiles(DEMO_FILES);
+        saveAllFiles(DEMO_FILES);
+        caSnapshots.createCASnapshot(DEMO_FILES, 'Initial project setup');
+        const firstFile = DEMO_FILES.find(f => !f.isFolder);
+        if (firstFile) {
+          setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+          setActiveTabId(firstFile.id);
+        } else {
+          setOpenTabs([]);
+          setActiveTabId(null);
+        }
       }
-    }
-    setFilesReady(true);
+      setFilesReady(true);
+    })();
+
+    return () => { cancelled = true; };
   }, [persistenceLoading, projectId, initialFiles, saveAllFiles, projects]);
 
   // ─── Auto-detect runtime from project files ───
@@ -558,10 +588,13 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       if (file && !file.isFolder) {
         saveFile(file.path, content);
       }
-      return prev.map(f => f.id === fileId ? { ...f, content } : f);
+      const updated = prev.map(f => f.id === fileId ? { ...f, content } : f);
+      // Debounced sync to content-addressed snapshot
+      caSnapshots.syncToSnapshot(updated);
+      return updated;
     });
     setOpenTabs(prev => prev.map(t => t.fileId === fileId ? { ...t, isModified: true } : t));
-  }, [saveFile]);
+  }, [saveFile, caSnapshots]);
 
   const createFile = useCallback((name: string, parentId: string | null, isFolder: boolean) => {
     const parent = parentId ? files.find(f => f.id === parentId) : null;
@@ -1225,21 +1258,36 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   // ─── Snapshots ───
 
   const createSnapshot = useCallback((label?: string) => {
+    // Create both legacy and CA snapshots
     createSnapshotRaw(files, label);
-  }, [files, createSnapshotRaw]);
+    caSnapshots.createCASnapshot(files, label || `Snapshot ${new Date().toLocaleString()}`);
+  }, [files, createSnapshotRaw, caSnapshots]);
 
   const restoreSnapshot = useCallback(async (snapshotId: string) => {
+    // Try CA checkout first
+    const caFiles = await caSnapshots.checkoutSnapshot(snapshotId);
+    if (caFiles && caFiles.length > 0) {
+      setFiles(caFiles);
+      saveAllFiles(caFiles);
+      const firstFile = caFiles.find(f => !f.isFolder);
+      if (firstFile) {
+        setOpenTabs([{ fileId: firstFile.id, name: firstFile.name, path: firstFile.path, isModified: false }]);
+        setActiveTabId(firstFile.id);
+      } else {
+        setOpenTabs([]);
+        setActiveTabId(null);
+      }
+      return;
+    }
+
+    // Fallback to legacy file_snapshots
     const snapshotFiles = await getSnapshotFiles(snapshotId);
     if (!snapshotFiles) return;
 
     const { buildIDEFilesFromRows } = await import('@/hooks/use-project-persistence');
     const ideFiles = buildIDEFilesFromRows(snapshotFiles);
     setFiles(ideFiles);
-
-    const fakeIDEFiles = snapshotFiles.map(f => ({
-      id: '', name: '', path: f.path, content: f.content, language: '', parentId: null, isFolder: false,
-    }));
-    saveAllFiles(fakeIDEFiles as any);
+    saveAllFiles(ideFiles);
 
     const firstFile = ideFiles.find(f => !f.isFolder);
     if (firstFile) {
@@ -1249,7 +1297,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setOpenTabs([]);
       setActiveTabId(null);
     }
-  }, [getSnapshotFiles, saveAllFiles]);
+  }, [caSnapshots, getSnapshotFiles, saveAllFiles]);
 
   // ─── Project Switching ───
 

@@ -795,4 +795,37 @@ export const BUILTIN_MCP_SERVERS: MCPServer[] = [
       { name: 'openclaw_mcp_invoke', description: 'Invoke any OpenClaw skill via MCP', inputSchema: { mcp_tool: { type: 'string' }, mcp_input: { type: 'object' } } },
     ],
   },
+  // ─── Protocol Zone: Web3 MCP Servers ───
+  {
+    id: 'mcp-moralis',
+    name: 'Moralis',
+    description: 'EVM blockchain data: token balances, NFTs, transfers, prices',
+    icon: '🔗',
+    enabled: false,
+    requiresAuth: true,
+    authConfigured: false,
+    tools: [
+      { name: 'moralis.getWalletTokenBalances', description: 'Get all ERC-20 token balances for a wallet', inputSchema: { address: { type: 'string' }, chain: { type: 'string' } } },
+      { name: 'moralis.getWalletNFTs', description: 'Get all NFTs owned by a wallet', inputSchema: { address: { type: 'string' }, chain: { type: 'string' }, cursor: { type: 'string' }, limit: { type: 'number' } } },
+      { name: 'moralis.getWalletTokenTransfers', description: 'Get token transfer history', inputSchema: { address: { type: 'string' }, chain: { type: 'string' }, cursor: { type: 'string' }, limit: { type: 'number' } } },
+      { name: 'moralis.getTokenPrice', description: 'Get current token price', inputSchema: { address: { type: 'string' }, chain: { type: 'string' } } },
+      { name: 'moralis.getNFTMetadata', description: 'Get metadata for a specific NFT', inputSchema: { address: { type: 'string' }, token_id: { type: 'string' }, chain: { type: 'string' } } },
+    ],
+  },
+  {
+    id: 'mcp-helius',
+    name: 'Helius',
+    description: 'Solana blockchain data: parsed transactions, account state, NFT metadata',
+    icon: '☀️',
+    enabled: false,
+    requiresAuth: true,
+    authConfigured: false,
+    tools: [
+      { name: 'helius.getParsedTransaction', description: 'Parse a Solana transaction by signature', inputSchema: { signature: { type: 'string' } } },
+      { name: 'helius.getAccountState', description: 'Get current state of a Solana account', inputSchema: { pubkey: { type: 'string' } } },
+      { name: 'helius.getProgramAccounts', description: 'List accounts owned by a program', inputSchema: { programId: { type: 'string' }, filters: { type: 'array' } } },
+      { name: 'helius.getNFTMetadata', description: 'Get Solana NFT metadata by mint', inputSchema: { mint: { type: 'string' } } },
+      { name: 'helius.streamWalletActivity', description: 'Get recent wallet transaction activity', inputSchema: { wallet: { type: 'string' }, cursor: { type: 'string' } } },
+    ],
+  },
 ];
