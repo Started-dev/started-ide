@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.install-openclaw]
 verify_jwt = false
+
+[functions.github-oauth]
+verify_jwt = false
