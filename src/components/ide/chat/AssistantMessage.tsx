@@ -115,11 +115,6 @@ export function AssistantMessage({ msg }: AssistantMessageProps) {
         </React.Fragment>
       ))}
 
-      <ConfidenceFooter
-        confidence={confidence}
-        verified={msg.content.includes('Verified: Yes')}
-        attestationHash={attestation}
-      />
       <RewindReasoning reasoning={msg.reasoning} />
     </div>
   );
