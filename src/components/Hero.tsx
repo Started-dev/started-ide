@@ -1,4 +1,6 @@
 import * as React from "react";
+import { useState } from "react";
+
 type HeroProps = {
   title?: string;
   subtitle?: string;
@@ -18,11 +20,20 @@ export default function Hero({
   ctaSecondaryHref = "https://docs.started.dev",
   badgeText = "Now in Public Beta",
 }: HeroProps) {
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  };
+
   return (
-    <section className="relative w-full min-h-[calc(100vh-72px)] flex items-center justify-center overflow-hidden">
+    <section
+      className="relative w-full min-h-[calc(100vh-72px)] flex items-center justify-center overflow-hidden"
+      onMouseMove={handleMouseMove}
+    >
       {/* Background */}
       <div className="absolute inset-0 z-0">
-        <HeroBackground />
+        <HeroBackground mouseX={mousePos.x} mouseY={mousePos.y} />
       </div>
 
       {/* Content */}
@@ -110,15 +121,13 @@ function splitKeep(input: string, token: string) {
   return out;
 }
 
-const ACCENT = "#F5A623";
-
-function HeroBackground() {
+function HeroBackground({ mouseX, mouseY }: { mouseX: number; mouseY: number }) {
   return (
     <div className="absolute inset-0 overflow-hidden">
       {/* Base background */}
       <div className="absolute inset-0 bg-background" />
 
-      {/* Toned-down vignette — reduced opacity */}
+      {/* Toned-down vignette */}
       <div
         className="absolute inset-0"
         style={{
@@ -137,20 +146,12 @@ function HeroBackground() {
         }}
       />
 
-      {/* Static pipeline diagram */}
-      <div className="absolute inset-0 flex items-center justify-center opacity-[0.07] pointer-events-none">
-        <svg viewBox="0 0 1000 500" className="w-full h-full max-w-4xl" preserveAspectRatio="xMidYMid meet">
-          <StaticPipeline />
-        </svg>
-      </div>
-
-      {/* Faint horizontal rule */}
+      {/* Mouse-following glow */}
       <div
-        className="absolute left-0 right-0"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          top: "46%",
-          height: 1,
-          background: `linear-gradient(90deg, transparent 10%, ${ACCENT}08 35%, ${ACCENT}12 50%, ${ACCENT}08 65%, transparent 90%)`,
+          background: `radial-gradient(600px circle at ${mouseX}px ${mouseY}px, hsl(38 92% 50% / 0.05), transparent 80%)`,
+          transition: "background 0.3s ease-out",
         }}
       />
 
@@ -162,45 +163,5 @@ function HeroBackground() {
         }}
       />
     </div>
-  );
-}
-
-function StaticPipeline() {
-  const nodes = [
-    { x: 170, y: 310, label: "Intent" },
-    { x: 330, y: 270, label: "Plan" },
-    { x: 500, y: 310, label: "Patch" },
-    { x: 670, y: 270, label: "Verify" },
-    { x: 830, y: 310, label: "Deploy" },
-  ];
-
-  const d = `M ${nodes[0].x} ${nodes[0].y}
-             C 240 250, 280 250, ${nodes[1].x} ${nodes[1].y}
-             S 430 350, ${nodes[2].x} ${nodes[2].y}
-             S 610 250, ${nodes[3].x} ${nodes[3].y}
-             S 770 350, ${nodes[4].x} ${nodes[4].y}`;
-
-  return (
-    <>
-      {/* Faint arcs */}
-      <g opacity="0.15">
-        <ellipse cx="500" cy="300" rx="350" ry="120" fill="none" stroke={ACCENT} strokeWidth="0.5" strokeDasharray="4 8" />
-        <ellipse cx="500" cy="300" rx="250" ry="80" fill="none" stroke={ACCENT} strokeWidth="0.3" strokeDasharray="2 6" />
-      </g>
-
-      {/* Pipeline path */}
-      <path d={d} fill="none" stroke={ACCENT} strokeWidth="1.5" opacity="0.4" />
-
-      {/* Nodes */}
-      {nodes.map((n, i) => (
-        <g key={i}>
-          <circle cx={n.x} cy={n.y} r="12" fill="none" stroke={ACCENT} strokeWidth="0.8" opacity="0.5" />
-          <circle cx={n.x} cy={n.y} r="4" fill={ACCENT} opacity="0.6" />
-          <text x={n.x} y={n.y + 28} textAnchor="middle" fontSize="9" fill={ACCENT} opacity="0.5" fontFamily="monospace" letterSpacing="0.1em">
-            {n.label.toUpperCase()}
-          </text>
-        </g>
-      ))}
-    </>
   );
 }
