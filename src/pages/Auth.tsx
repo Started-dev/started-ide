@@ -4,7 +4,7 @@ import { Mail, Lock, ArrowRight, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import startedLogo from '@/assets/started-logo.png';
+import Hero from '@/components/Hero';
 import startedWordmark from '@/assets/started-wordmark.svg';
 
 export default function Auth() {
@@ -45,24 +45,6 @@ export default function Auth() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
-      {/* ── Dot grid pattern ── */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.035]"
-        style={{
-          backgroundImage: 'radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
-        }}
-      />
-
-      {/* ── Background glow ── */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 60% 50% at 50% 40%, hsl(38 92% 50% / 0.06) 0%, transparent 70%)',
-        }}
-      />
-
       {/* ── Top Nav ── */}
       <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-5">
         <div className="flex items-center">
@@ -86,53 +68,16 @@ export default function Auth() {
         </div>
       </nav>
 
-      {/* ── Hero Content ── */}
-      <main className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ height: 'calc(100vh - 72px)' }}>
-        <div className="animate-fade-in max-w-3xl mx-auto flex flex-col items-center gap-6">
-          {/* Announcement pill */}
-          <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1 text-xs font-medium text-primary tracking-wide">
-            Now in Public Beta
-          </span>
-
-          {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
-            Ship production software with{' '}
-            <span className="text-primary">AI agents</span>.
-          </h1>
-
-          {/* Subtext */}
-          <p className="text-base sm:text-lg text-muted-foreground max-w-xl leading-relaxed">
-            Plan, generate, verify, and deploy real applications — inside a live AI-native development environment.
-          </p>
-
-          {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 mt-2">
-            <Button
-              size="lg"
-              className="h-11 px-7 text-sm font-medium rounded-lg shadow-[0_0_20px_hsl(38_92%_50%/0.15)] hover:shadow-[0_0_30px_hsl(38_92%_50%/0.25)] transition-all duration-300 hover:scale-[1.02]"
-              onClick={() => { setShowAuth(true); setIsSignUp(true); }}
-            >
-              Get Started
-              <ArrowRight className="h-4 w-4 ml-1.5" />
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-11 px-7 text-sm font-medium rounded-lg border-border/60 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all duration-300"
-              asChild
-            >
-              <a href="https://docs.started.dev" target="_blank" rel="noopener noreferrer">
-                View Documentation
-              </a>
-            </Button>
-          </div>
-
-          {/* Trust line */}
-          <p className="text-xs text-muted-foreground/50 mt-1 tracking-wide">
-            No setup required&ensp;•&ensp;Runs in your browser
-          </p>
-        </div>
-      </main>
+      {/* ── Hero ── */}
+      <Hero
+        title={"Ship production software\nwith AI agents."}
+        subtitle="Plan, generate, verify, and deploy real applications — inside a live AI-native development environment."
+        ctaPrimaryLabel="Get Started"
+        onCtaPrimary={() => { setShowAuth(true); setIsSignUp(true); }}
+        ctaSecondaryLabel="View Documentation"
+        ctaSecondaryHref="https://docs.started.dev"
+        badgeText="Now in Public Beta"
+      />
 
       {/* ── Auth Modal Overlay ── */}
       {showAuth && (
