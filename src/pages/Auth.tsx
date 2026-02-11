@@ -46,25 +46,22 @@ export default function Auth() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       {/* ── Top Nav ── */}
-      <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-4 mx-4 md:mx-8 mt-3 rounded-2xl bg-card/40 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.05)] before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-b before:from-white/[0.06] before:to-transparent before:pointer-events-none overflow-hidden">
-        {/* Animated gradient border */}
-        <div className="absolute inset-0 rounded-2xl p-px pointer-events-none" style={{ background: 'linear-gradient(var(--nav-border-angle, 0deg), hsl(38 92% 50% / 0.15), transparent 40%, hsl(38 92% 50% / 0.08), transparent 80%, hsl(38 92% 50% / 0.12))', animation: 'nav-border-rotate 8s linear infinite' }} />
-        <div className="absolute inset-px rounded-[15px] bg-card/60 backdrop-blur-xl pointer-events-none" />
-        <div className="relative z-10 flex items-center">
+      <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-4 mx-4 md:mx-8 mt-3 rounded-2xl border border-border/30 bg-card/40 backdrop-blur-xl shadow-[0_4px_16px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.05)] before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-b before:from-white/[0.06] before:to-transparent before:pointer-events-none">
+        <div className="flex items-center">
           <img src={startedWordmark} alt="Started" className="h-10" />
         </div>
-        <div className="relative z-10 flex items-center gap-6">
+        <div className="flex items-center gap-6">
           <a
             href="https://docs.started.dev"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-muted-foreground hover:text-foreground transition-all duration-300 px-3 py-1.5 rounded-lg hover:bg-white/[0.06] hover:shadow-[0_0_12px_hsl(38_92%_50%/0.1)]"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
           >
             Docs
           </a>
           <button
             onClick={() => { setShowAuth(true); setIsSignUp(false); }}
-            className="text-sm text-muted-foreground hover:text-foreground transition-all duration-300 px-3 py-1.5 rounded-lg hover:bg-white/[0.06] hover:shadow-[0_0_12px_hsl(38_92%_50%/0.1)]"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
           >
             Sign In
           </button>
