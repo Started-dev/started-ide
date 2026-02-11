@@ -120,7 +120,7 @@ export function IDELayout() {
       <div className="flex items-center justify-between px-4 h-10 bg-ide-panel-header border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <img src={startedWordmark} alt="Started" className="h-5" />
+            <img src={startedWordmark} alt="Started" className="h-7" />
           </div>
           <button
             onClick={() => setShowProjectSwitcher(true)}
