@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import startedLogo from '@/assets/started-logo.png';
+import startedWordmark from '@/assets/started-wordmark.svg';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -64,9 +65,8 @@ export default function Auth() {
 
       {/* ── Top Nav ── */}
       <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-5">
-        <div className="flex items-center gap-2.5">
-          <img src={startedLogo} alt="Started" className="h-8 w-8 rounded-full" />
-          <span className="text-base font-semibold text-foreground tracking-tight">Started</span>
+        <div className="flex items-center">
+          <img src={startedWordmark} alt="Started" className="h-8" />
         </div>
         <div className="flex items-center gap-6">
           <a
