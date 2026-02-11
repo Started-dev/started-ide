@@ -867,6 +867,20 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     if (startedMd && startedMd.content.trim()) {
       contextParts.unshift(`[STARTED.md — Project Brief]\n${startedMd.content}`);
     }
+
+    // ─── Inject project file tree ───
+    const nonFolderFiles = currentFiles.filter(f => !f.isFolder);
+    if (nonFolderFiles.length > 0) {
+      const fileTree = nonFolderFiles.map(f => f.path).sort().join('\n');
+      contextParts.push(`[Project Files]\n${fileTree}`);
+    }
+
+    // ─── Inject active file contents ───
+    const activeFileObj = currentFiles.find(f => f.id === activeTabId && !f.isFolder);
+    if (activeFileObj && activeFileObj.content) {
+      contextParts.push(`[Active File: ${activeFileObj.path}]\n${activeFileObj.content}`);
+    }
+
     if (chips) {
       for (const chip of chips) {
         if (chip.type === 'selection') contextParts.push(`[Selected code]\n${chip.content}`);
