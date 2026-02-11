@@ -45,6 +45,10 @@
     --sidebar-border: 220 14% 16%;
     --sidebar-ring: 38 92% 50%;
 
+    /* Chat-specific tokens */
+    --chat-surface: 220 14% 11%;
+    --chat-block-bg: 220 14% 13%;
+
     /* IDE-specific tokens */
     --ide-panel-bg: 220 14% 11%;
     --ide-panel-header: 220 14% 13%;
@@ -95,6 +99,9 @@
     --sidebar-accent-foreground: 220 14% 15%;
     --sidebar-border: 220 14% 88%;
     --sidebar-ring: 38 92% 45%;
+
+    --chat-surface: 220 14% 97%;
+    --chat-block-bg: 220 14% 95%;
 
     --ide-panel-bg: 220 14% 98%;
     --ide-panel-header: 220 14% 95%;
@@ -159,4 +166,14 @@
   to {
     --nav-border-angle: 360deg;
   }
+}
+
+@keyframes pulse-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes diff-line-enter {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }

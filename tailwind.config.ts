@@ -73,6 +73,10 @@ export default {
           info: "hsl(var(--ide-info))",
           selection: "hsl(var(--ide-selection))",
         },
+        chat: {
+          surface: "hsl(var(--chat-surface))",
+          block: "hsl(var(--chat-block-bg))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -100,12 +104,24 @@ export default {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
         },
+        "pulse-bar": {
+          "0%, 100%": { transform: "scaleY(0.3)" },
+          "50%": { transform: "scaleY(1)" },
+        },
+        "diff-line-enter": {
+          from: { opacity: "0", transform: "translateY(2px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.15s ease-out",
         "slide-up": "slide-up 0.2s ease-out",
+        "pulse-bar-1": "pulse-bar 1.2s ease-in-out infinite",
+        "pulse-bar-2": "pulse-bar 1.2s ease-in-out 0.2s infinite",
+        "pulse-bar-3": "pulse-bar 1.2s ease-in-out 0.4s infinite",
+        "diff-line": "diff-line-enter 0.15s ease-out forwards",
       },
     },
   },

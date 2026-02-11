@@ -22,6 +22,12 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   contextChips?: ContextChip[];
+  reasoning?: {
+    signals: string[];
+    state: string;
+    action: string;
+    reason: string;
+  };
 }
 
 export interface ContextChip {
