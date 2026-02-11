@@ -1,92 +1,169 @@
 
 
-## Fix: AI Chat Flow -- Plans Without Execution
+# Comprehensive Fix: Conversations, GitHub Integration, MCP Auth, and Agent Intelligence
 
-Three root causes identified from network traffic and code analysis. The AI is working (200 responses, streaming correctly), but it outputs plans with `Cmd: ls -F` instead of actually creating/modifying files.
+## Problem Summary
+
+1. **Chat conversations are NOT saving** -- The `conversations` table `id` column is `uuid` type, but the code generates IDs like `conv-1234567890-abcd` which are NOT valid UUIDs. Every insert silently fails.
+2. **GitHub integration is basic** -- Currently requires pasting a Personal Access Token (PAT). No OAuth flow, no repo/branch display in the project UI.
+3. **MCP tokens stored in `sessionStorage`** -- All tokens vanish when the browser tab closes. No persistent storage.
+4. **Agent/AI lacks MCP execution results** -- The agent loop says "MCP tool was called, result will be provided" but never actually calls the tool or feeds back real results.
 
 ---
 
-### Root Cause 1: AI Has No File Context
+## Fix 1: Conversation Persistence (CRITICAL)
 
-The `sendMessage` function (IDEContext.tsx, line 860) sends `STARTED.md` as context but never sends the project file tree or file contents. The AI literally doesn't know what files exist, so it keeps asking to run `ls -F` to find out.
+**Root Cause:** `makeNewConversation` generates `conv-${Date.now()}-xxxx` as the conversation ID, but the `conversations.id` column is `uuid` type. The Supabase insert fails silently.
 
-**Fix in `src/contexts/IDEContext.tsx`:**
+**Fix:**
+- Change `makeNewConversation` in `IDEContext.tsx` to use `crypto.randomUUID()` instead of the string-based ID format
+- Add error logging to `createConversation` and `saveConversation` in `use-conversation-persistence.ts` so failures surface in the console
+- Add a `beforeunload` listener to flush any pending debounced saves immediately when the user closes the browser
 
-In the `sendMessage` callback, after the STARTED.md context injection (line 866-869), add a file tree listing and active file contents to the context string:
+**Files:** `src/contexts/IDEContext.tsx`, `src/hooks/use-conversation-persistence.ts`
 
+---
+
+## Fix 2: GitHub OAuth Integration
+
+**Current state:** Users paste a GitHub PAT into `sessionStorage` via the MCP Config panel. No OAuth, no repo display.
+
+**Plan:**
+- Add a GitHub OAuth flow using Supabase Auth's GitHub provider (the user clicks "Connect GitHub" and goes through the standard OAuth consent screen)
+- Store the GitHub access token from the OAuth session rather than requiring manual PAT entry
+- Add a `GitHubStatus` component to the `ProjectSwitcher` that displays the connected repo name and current branch when GitHub is connected
+- Add GitHub tools: `github_create_repo`, `github_push_files`, `github_commit` to the MCP GitHub edge function
+- The MCPConfig panel for GitHub will show "Connect with GitHub" button instead of the PAT input when no token exists
+
+**New tools added to `mcp-github` edge function:**
+- `github_create_repo` -- Create a new repository
+- `github_push_files` -- Push file changes to a branch
+- `github_list_commits` -- List recent commits
+
+**Files:** `src/components/ide/MCPConfig.tsx`, `src/components/ide/ProjectSwitcher.tsx`, `supabase/functions/mcp-github/index.ts`, `src/types/mcp-servers.ts`
+
+---
+
+## Fix 3: Persistent MCP Token Storage
+
+**Current state:** All MCP tokens are stored in `sessionStorage` and disappear when the tab closes.
+
+**Plan:**
+- Migrate token storage from `sessionStorage` to `localStorage` with an encrypted wrapper
+- Add a `mcp_tokens` table in the database for server-side persistence (encrypted, per-user, per-project)
+- On load, hydrate tokens from `localStorage` first, then sync from the database
+- For services that support OAuth (GitHub, Google Sheets, Slack, Notion), show an "Connect with OAuth" button as the preferred option, with "Paste API Key" as fallback
+
+**Database migration:**
+```sql
+CREATE TABLE mcp_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  server_id text NOT NULL,
+  token_key text NOT NULL,
+  token_value text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(user_id, project_id, server_id, token_key)
+);
+ALTER TABLE mcp_tokens ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own tokens" ON mcp_tokens FOR ALL USING (user_id = auth.uid());
 ```
-[Project Files]
-/src/main.ts
-/src/utils.ts
-/package.json
-/tsconfig.json
-/README.md
-/STARTED.md
 
-[Active File: /src/main.ts]
-<contents>
+**Files:** `src/components/ide/MCPConfig.tsx`, `src/lib/mcp-client.ts`, new migration
+
+---
+
+## Fix 4: Agent MCP Tool Execution
+
+**Current state:** When the agent decides to call an MCP tool, it emits an event but the conversation just says "MCP tool was called. The result will be provided." -- no actual execution happens.
+
+**Plan:**
+- In the `agent-run` edge function, when `action === "mcp_call"`, actually invoke the MCP edge function server-side and feed the result back into the conversation history
+- The agent can then reason about real MCP results (e.g., list of GitHub repos, Slack messages, etc.)
+- Add a server-side MCP dispatch function that routes tool calls to the correct edge function using the service role key
+
+**Files:** `supabase/functions/agent-run/index.ts`
+
+---
+
+## Fix 5: AI Context and Memory Improvements
+
+**Current state:** Chat only sends the last 10 messages. No cross-session memory.
+
+**Plan:**
+- Increase message history window from 10 to 20 for better context
+- Add a `memory_notes` jsonb column to the `projects` table to store per-project AI memory (key learnings, user preferences, architectural decisions)
+- The AI system prompt will include relevant memory notes
+- After each conversation, extract and persist key facts to memory
+
+**Files:** `src/contexts/IDEContext.tsx`, `supabase/functions/started/index.ts`, migration for `projects.memory_notes`
+
+---
+
+## Technical Details
+
+### Conversation ID Fix (highest priority)
+```typescript
+// Before (broken):
+const makeNewConversation = (pId: string): Conversation => ({
+  id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+  ...
+});
+
+// After (fixed):
+const makeNewConversation = (pId: string): Conversation => ({
+  id: crypto.randomUUID(),
+  ...
+});
 ```
 
-This gives the AI enough information to produce diffs and file blocks directly without needing to run shell commands.
+### Browser Close Save Flush
+```typescript
+// In use-conversation-persistence.ts
+useEffect(() => {
+  const flush = () => {
+    Object.values(saveTimers.current).forEach(clearTimeout);
+    // Synchronous save via navigator.sendBeacon
+  };
+  window.addEventListener('beforeunload', flush);
+  return () => window.removeEventListener('beforeunload', flush);
+}, []);
+```
+
+### Agent MCP Execution (server-side)
+```typescript
+// In agent-run edge function, after parsing action === "mcp_call"
+const mcpResult = await fetch(
+  `${Deno.env.get("SUPABASE_URL")}/functions/v1/${parsed.mcp_server}`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ tool: parsed.mcp_tool, input: parsed.mcp_input }),
+  }
+);
+const mcpData = await mcpResult.json();
+conversationHistory.push({
+  role: "user",
+  content: `MCP tool ${parsed.mcp_tool} returned: ${JSON.stringify(mcpData.result || mcpData.error)}`,
+});
+```
 
 ---
 
-### Root Cause 2: System Prompt Forbids Full File Output
+## Implementation Order
 
-The StartedAI system prompt (`src/lib/started-prompt.ts`, line 39) says:
-> "Patches only -- never dump full files."
-
-This prevents the AI from creating new files. When a user says "Create a React app scaffold," the AI cannot use the `typescript src/App.tsx` file-block format because the prompt forbids it.
-
-**Fix in `src/lib/started-prompt.ts`:**
-
-Update BOTH system prompts (standard and StartedAI) to:
-- Inform the AI that project files are provided in context (no need to run `ls`)
-- Allow full file blocks for NEW file creation using the format: ````lang path/to/file.ext`
-- Keep "patches only" rule for MODIFYING existing files
-- Tell the AI that commands in `Cmd:` blocks are NOT auto-executed (no runner)
-- Instruct the AI to produce actionable output (diffs and file blocks) directly
-
-**Fix in `supabase/functions/started/index.ts`:**
-
-Mirror the same prompt changes in the edge function's server-side copy of the prompts (the edge function has its own duplicated prompts at lines 11-62).
-
----
-
-### Root Cause 3: Duplicate Prompt Issue
-
-The `started` edge function (lines 11-62) has its own hardcoded copies of STARTED_SYSTEM_PROMPT and STARTED_AI_SYSTEM_PROMPT that are completely separate from `src/lib/started-prompt.ts`. The client-side file `started-prompt.ts` is only imported by `IDEContext.tsx` but never sent to the edge function. The edge function uses its own local copies.
-
-This means prompt changes must be made in the edge function file, not the client-side file. The client-side `started-prompt.ts` is effectively dead code for chat (only used by the local `STARTED_SYSTEM_PROMPT` import in IDEContext, which is never actually sent to the API).
-
-**Fix:** Update the prompts in `supabase/functions/started/index.ts` (the actual prompts used by the AI) and keep `src/lib/started-prompt.ts` in sync.
-
----
-
-### Summary of Changes
-
-| File | Change |
-|------|--------|
-| `supabase/functions/started/index.ts` | Update system prompts: add file-context awareness, allow file blocks for new files, remove "inspect first" instructions, note that commands are not auto-executed |
-| `src/lib/started-prompt.ts` | Mirror the same prompt changes for consistency |
-| `src/contexts/IDEContext.tsx` | In `sendMessage`, inject project file tree + active file contents into the context string sent to the AI |
-
----
-
-### Technical Detail: Updated System Prompts
-
-**Key additions to both prompts:**
-
-1. "Project files and their contents are provided in context. Do NOT run shell commands to inspect the file system."
-2. "For NEW files, use fenced code blocks with the file path: ````lang path/to/file.ext`"
-3. "For MODIFYING existing files, use unified diff patches."
-4. "Commands in Cmd blocks are suggestions only -- they are not auto-executed. Focus on producing diffs and file blocks."
-
-**Key additions to context injection (IDEContext.tsx):**
-
-1. Build a file tree string from `filesRef.current` listing all file paths
-2. Include the contents of the currently active file
-3. Include contents of any files referenced in the conversation
-
-This ensures the AI always has enough context to act directly instead of asking to run commands first.
+1. Fix conversation UUIDs (immediate impact -- chats will save)
+2. Add `beforeunload` save flush
+3. Migrate MCP tokens to `localStorage` 
+4. Create `mcp_tokens` database table
+5. Implement agent-side MCP execution
+6. Add GitHub OAuth flow and repo/branch display
+7. Add expanded GitHub tools (create repo, push files)
+8. Add project memory notes
+9. Increase chat context window
 
