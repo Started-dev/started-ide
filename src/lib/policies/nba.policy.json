@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "max_actions": { "primary": 1, "secondary": 2 },
+  "confidence_thresholds": {
+    "high": 0.78,
+    "medium": 0.52
+  },
+  "defaults": {
+    "prefer_preview_before_apply": true,
+    "auto_attach_context": {
+      "errors_last_run": true,
+      "diff_current": true,
+      "active_file": true
+    },
+    "never_ship_without_verification": true
+  },
+  "weights": {
+    "urgency": {
+      "last_run_failed": 40,
+      "agent_blocked": 50,
+      "diff_dirty_unverified": 30,
+      "patch_ready_unapplied": 25,
+      "time_since_progress_60s": 10
+    },
+    "verification_bonus": {
+      "run_tests": 25,
+      "run_build": 20,
+      "generate_attestation": 18,
+      "replay_attestation": 12
+    },
+    "momentum_bonus": {
+      "preview_diff_when_patch_ready": 12,
+      "apply_patch_after_preview": 15,
+      "run_after_apply": 20,
+      "continue_agent": 25
+    },
+    "safety_penalty": {
+      "risk_simulate": 10,
+      "risk_write": 35,
+      "requires_approval_ungranted": 100
+    },
+    "friction_penalty": {
+      "ignored_multiplier": 10,
+      "context_question_penalty": 18
+    }
+  },
+  "gates": {
+    "hard_deny_command_patterns": [
+      "rm -rf",
+      "sudo ",
+      "curl | bash",
+      "wget | bash",
+      "ssh ",
+      "scp ",
+      "chmod 777",
+      ":(){ :|:& };:"
+    ],
+    "ship_requires": {
+      "attestation": true,
+      "tests_or_build": true
+    }
+  },
+  "suggestion_memory": {
+    "ignore_decay_days": 7,
+    "max_ignore_count_before_suppress": 2
+  },
+  "action_overrides": {
+    "when_last_run_failed": {
+      "force_include": ["fix_or_plan", "explain_error"],
+      "suppress": ["create_pr", "deploy"]
+    },
+    "when_patch_ready": {
+      "primary_if_user_did_not_explicitly_say_apply": "preview_diff"
+    },
+    "when_agent_running": {
+      "primary": "continue_agent",
+      "suppress": ["start_agent", "create_pr", "deploy"]
+    }
+  }
+}

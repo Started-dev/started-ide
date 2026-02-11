@@ -1,0 +1,20 @@
+{
+  "_comment": "Example project override for a Web3-heavy project that prefers simulation and auto-run tests.",
+  "defaults": {
+    "prefer_preview_before_apply": false
+  },
+  "weights": {
+    "verification_bonus": {
+      "generate_attestation": 25
+    },
+    "safety_penalty": {
+      "risk_simulate": 6
+    }
+  },
+  "gates": {
+    "ship_requires": {
+      "attestation": true,
+      "tests_or_build": true
+    }
+  }
+}
