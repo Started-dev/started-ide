@@ -88,7 +88,7 @@ export default function Auth() {
 
       {/* ── Hero Content ── */}
       <main className="relative z-10 flex flex-col items-center justify-center px-6 text-center" style={{ height: 'calc(100vh - 72px)' }}>
-        <div className="animate-fade-in max-w-2xl mx-auto flex flex-col items-center gap-6">
+        <div className="animate-fade-in max-w-3xl mx-auto flex flex-col items-center gap-6">
           {/* Announcement pill */}
           <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1 text-xs font-medium text-primary tracking-wide">
             Now in Public Beta
@@ -101,7 +101,7 @@ export default function Auth() {
           </h1>
 
           {/* Subtext */}
-          <p className="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed">
+          <p className="text-base sm:text-lg text-muted-foreground max-w-xl leading-relaxed">
             Plan, generate, verify, and deploy real applications — inside a live AI-native development environment.
           </p>
 
