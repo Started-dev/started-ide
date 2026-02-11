@@ -1,5 +1,4 @@
 import * as React from "react";
-import { useState } from "react";
 
 type HeroProps = {
   title?: string;
@@ -20,20 +19,14 @@ export default function Hero({
   ctaSecondaryHref = "https://docs.started.dev",
   badgeText = "Now in Public Beta",
 }: HeroProps) {
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    setMousePos({ x: e.clientX, y: e.clientY });
-  };
-
   return (
     <section
       className="relative w-full min-h-[calc(100vh-72px)] flex items-center justify-center overflow-hidden"
-      onMouseMove={handleMouseMove}
+      style={{ cursor: "url('/cursor-bracket.svg') 5 12, auto" }}
     >
       {/* Background */}
       <div className="absolute inset-0 z-0">
-        <HeroBackground mouseX={mousePos.x} mouseY={mousePos.y} />
+        <HeroBackground />
       </div>
 
       {/* Content */}
@@ -121,7 +114,7 @@ function splitKeep(input: string, token: string) {
   return out;
 }
 
-function HeroBackground({ mouseX, mouseY }: { mouseX: number; mouseY: number }) {
+function HeroBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden">
       {/* Base background */}
@@ -143,15 +136,6 @@ function HeroBackground({ mouseX, mouseY }: { mouseX: number; mouseY: number }) 
           backgroundImage:
             "radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
-        }}
-      />
-
-      {/* Mouse-following glow */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(400px circle at ${mouseX}px ${mouseY}px, hsl(38 92% 50% / 0.03), transparent 80%)`,
-          transition: "background 0.6s cubic-bezier(0.25, 0.1, 0.25, 1)",
         }}
       />
 
