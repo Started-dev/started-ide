@@ -118,7 +118,7 @@ export function TransactionBuilder({ onClose }: TransactionBuilderProps) {
   const [sending, setSending] = useState(false);
   const [sendingIdx, setSendingIdx] = useState(-1);
 
-  const rpcUrl = sessionStorage.getItem('evm_rpc_url') || sessionStorage.getItem('evm_rpc_url_sim') || '';
+  const rpcUrl = localStorage.getItem('evm_rpc_url') || localStorage.getItem('evm_rpc_url_sim') || '';
 
   const activeCall = calls[activeCallIdx] || calls[0];
 
@@ -171,8 +171,8 @@ export function TransactionBuilder({ onClose }: TransactionBuilderProps) {
         tool: 'contract_get_abi',
         input: { address: addr },
         serverId: 'mcp-contract-intel',
-        etherscanKey: sessionStorage.getItem('etherscan_api_key') || undefined,
-        etherscanChain: sessionStorage.getItem('etherscan_chain') || 'ethereum',
+        etherscanKey: localStorage.getItem('etherscan_api_key') || undefined,
+        etherscanChain: localStorage.getItem('etherscan_chain') || 'ethereum',
       });
       if (result.ok && result.result) {
         const abiData = (result.result as any).abi || result.result;

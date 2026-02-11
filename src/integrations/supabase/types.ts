@@ -833,6 +833,47 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          server_id: string
+          token_key: string
+          token_value: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          server_id: string
+          token_key: string
+          token_value: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          server_id?: string
+          token_key?: string
+          token_value?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_tokens_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mcp_tools: {
         Row: {
           created_at: string
@@ -1257,6 +1298,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          memory_notes: Json | null
           name: string
           owner_id: string
           runner_session_id: string | null
@@ -1264,6 +1306,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          memory_notes?: Json | null
           name?: string
           owner_id: string
           runner_session_id?: string | null
@@ -1271,6 +1314,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          memory_notes?: Json | null
           name?: string
           owner_id?: string
           runner_session_id?: string | null

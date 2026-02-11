@@ -608,10 +608,35 @@ serve(async (req) => {
             }
 
             if (parsed.action === "mcp_call" && parsed.mcp_tool) {
-              if (agentRunId) await persistStep(db, agentRunId, iteration, "mcp_call", `MCP: ${parsed.mcp_tool}`, { server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input }, {}, "ok", stepDuration);
+              // Actually invoke the MCP edge function server-side
+              let mcpResultText = "MCP call failed: unknown error";
+              try {
+                const mcpServer = (parsed.mcp_server || "mcp-github") as string;
+                const mcpResp = await fetch(
+                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/${mcpServer}`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ tool: parsed.mcp_tool, input: parsed.mcp_input || {} }),
+                  }
+                );
+                const mcpData = await mcpResp.json();
+                if (mcpData.ok) {
+                  mcpResultText = `MCP tool \`${parsed.mcp_tool}\` succeeded. Result: ${JSON.stringify(mcpData.result).slice(0, 2000)}`;
+                } else {
+                  mcpResultText = `MCP tool \`${parsed.mcp_tool}\` failed: ${mcpData.error || "unknown error"}`;
+                }
+              } catch (mcpErr) {
+                mcpResultText = `MCP tool \`${parsed.mcp_tool}\` threw: ${mcpErr instanceof Error ? mcpErr.message : "unknown"}`;
+              }
+
+              if (agentRunId) await persistStep(db, agentRunId, iteration, "mcp_call", `MCP: ${parsed.mcp_tool}`, { server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input }, { result: mcpResultText }, "ok", stepDuration);
               sendEvent({ type: "step", step: { id: `step-${Date.now()}-mcp`, type: "mcp_call", label: `MCP: ${parsed.mcp_tool}`, detail: parsed.summary as string, status: "completed" }, iteration });
               sendEvent({ type: "mcp_call", server: parsed.mcp_server, tool: parsed.mcp_tool, input: parsed.mcp_input || {}, summary: parsed.summary });
-              conversationHistory.push({ role: "user", content: `MCP tool \`${parsed.mcp_tool}\` was called. The result will be provided. Continue with next step.` });
+              conversationHistory.push({ role: "user", content: mcpResultText });
             }
 
             if (!["patch", "run_command", "done", "error", "mcp_call"].includes(parsed.action as string || "")) {

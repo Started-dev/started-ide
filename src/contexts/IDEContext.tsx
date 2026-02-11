@@ -371,7 +371,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   }, [dbConversations, localConversations]);
 
   const makeNewConversation = useCallback((pId: string): Conversation => ({
-    id: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: crypto.randomUUID(),
     title: 'New Chat',
     messages: [makeWelcomeMessage()],
     createdAt: new Date(),
@@ -901,7 +901,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
 
     const apiMessages = chatMessages
       .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-10)
+      .slice(-20)
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
     apiMessages.push({ role: 'user', content });
 

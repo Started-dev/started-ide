@@ -49,6 +49,31 @@ export function useConversationPersistence(projectId: string | null, user: User 
   const [loading, setLoading] = useState(true);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  // Flush pending saves on browser close
+  useEffect(() => {
+    const flush = () => {
+      Object.entries(saveTimers.current).forEach(([convId, timer]) => {
+        clearTimeout(timer);
+        // Best-effort sync flush via sendBeacon
+        const conv = conversations.find(c => c.id === convId);
+        if (conv && projectId && user) {
+          try {
+            const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/conversations?id=eq.${convId}`;
+            const body = JSON.stringify({
+              messages: messagesToJson(conv.messages),
+              title: conv.title,
+              updated_at: new Date().toISOString(),
+            });
+            navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+          } catch { /* best effort */ }
+        }
+      });
+      saveTimers.current = {};
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => window.removeEventListener('beforeunload', flush);
+  }, [conversations, projectId, user]);
+
   // Load conversations for the current project
   useEffect(() => {
     if (!projectId || !user) {
@@ -88,26 +113,29 @@ export function useConversationPersistence(projectId: string | null, user: User 
   // Create a new conversation in the DB
   const createConversation = useCallback(async (conv: Conversation): Promise<string | null> => {
     if (!projectId || !user) return null;
-    try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert({
-          id: conv.id,
-          project_id: projectId,
-          user_id: user.id,
-          title: conv.title,
-          messages: messagesToJson(conv.messages) as any,
-        })
-        .select('id')
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from('conversations')
+          .insert({
+            id: conv.id,
+            project_id: projectId,
+            user_id: user.id,
+            title: conv.title,
+            messages: messagesToJson(conv.messages) as any,
+          })
+          .select('id')
+          .single();
 
-      if (error) throw error;
-      setConversations(prev => [...prev, conv]);
-      return data?.id || conv.id;
-    } catch (err) {
-      console.error('Failed to create conversation:', err);
-      return null;
-    }
+        if (error) {
+          console.error('Failed to create conversation (DB):', error.message, error.details, error.hint);
+          throw error;
+        }
+        setConversations(prev => [...prev, conv]);
+        return data?.id || conv.id;
+      } catch (err) {
+        console.error('Failed to create conversation:', err);
+        return null;
+      }
   }, [projectId, user]);
 
   // Save conversation messages (debounced)

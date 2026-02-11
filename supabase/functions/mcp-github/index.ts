@@ -117,6 +117,66 @@ serve(async (req) => {
         break;
       }
 
+      case "github_create_repo": {
+        const { name, description, private: isPrivate, auto_init } = input || {};
+        if (!name) return json({ error: "name required" }, 400);
+        result = await githubFetch(`/user/repos`, github_token, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description: description || "", private: isPrivate ?? true, auto_init: auto_init ?? true }),
+        });
+        break;
+      }
+
+      case "github_list_commits": {
+        const { owner, repo, sha, per_page } = input || {};
+        if (!owner || !repo) return json({ error: "owner, repo required" }, 400);
+        const params = new URLSearchParams();
+        if (sha) params.set("sha", sha);
+        params.set("per_page", String(per_page || 10));
+        result = await githubFetch(`/repos/${owner}/${repo}/commits?${params}`, github_token);
+        break;
+      }
+
+      case "github_push_file": {
+        const { owner, repo, path, content, message, branch, sha: fileSha } = input || {};
+        if (!owner || !repo || !path || content === undefined || !message) {
+          return json({ error: "owner, repo, path, content, message required" }, 400);
+        }
+        const pushBody: Record<string, unknown> = {
+          message,
+          content: btoa(unescape(encodeURIComponent(content))),
+        };
+        if (branch) pushBody.branch = branch;
+        if (fileSha) pushBody.sha = fileSha;
+        result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, github_token, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pushBody),
+        });
+        break;
+      }
+
+      case "github_delete_file": {
+        const { owner, repo, path, message, sha: delSha, branch: delBranch } = input || {};
+        if (!owner || !repo || !path || !message || !delSha) {
+          return json({ error: "owner, repo, path, message, sha required" }, 400);
+        }
+        const delBody: Record<string, unknown> = { message, sha: delSha };
+        if (delBranch) delBody.branch = delBranch;
+        result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, github_token, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(delBody),
+        });
+        break;
+      }
+
+      case "github_get_user": {
+        result = await githubFetch(`/user`, github_token);
+        break;
+      }
+
       default:
         return json({ error: `Unknown tool: ${tool}` }, 400);
     }

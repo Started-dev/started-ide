@@ -28,14 +28,14 @@ interface Installation {
 
 function getConfig(): OpenClawConfig {
   return {
-    url: sessionStorage.getItem('openclaw_url') || '',
-    apiKey: sessionStorage.getItem('openclaw_api_key') || '',
+    url: localStorage.getItem('openclaw_url') || '',
+    apiKey: localStorage.getItem('openclaw_api_key') || '',
   };
 }
 
 function saveConfig(cfg: OpenClawConfig) {
-  sessionStorage.setItem('openclaw_url', cfg.url);
-  sessionStorage.setItem('openclaw_api_key', cfg.apiKey);
+  localStorage.setItem('openclaw_url', cfg.url);
+  localStorage.setItem('openclaw_api_key', cfg.apiKey);
 }
 
 async function callOpenClaw(tool: string, input?: Record<string, unknown>) {
@@ -417,7 +417,7 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
           {configured && (
             <>
               <div className="flex-1" />
-              <button onClick={() => { setConfigured(false); sessionStorage.removeItem('openclaw_url'); sessionStorage.removeItem('openclaw_api_key'); }} className="px-3 text-[10px] text-muted-foreground hover:text-destructive">
+              <button onClick={() => { setConfigured(false); localStorage.removeItem('openclaw_url'); localStorage.removeItem('openclaw_api_key'); }} className="px-3 text-[10px] text-muted-foreground hover:text-destructive">
                 Disconnect
               </button>
             </>

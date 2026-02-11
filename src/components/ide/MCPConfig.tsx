@@ -301,23 +301,23 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
     const cfg = TOKEN_CONFIG[serverId];
     if (!cfg) return false;
     if (cfg.secondaryKey) {
-      return (savedFlags[serverId] || !!sessionStorage.getItem(cfg.storageKey)) && !!sessionStorage.getItem(cfg.secondaryKey);
+      return (savedFlags[serverId] || !!localStorage.getItem(cfg.storageKey)) && !!localStorage.getItem(cfg.secondaryKey);
     }
-    return savedFlags[serverId] || !!sessionStorage.getItem(cfg.storageKey);
+    return savedFlags[serverId] || !!localStorage.getItem(cfg.storageKey);
   };
 
   const handleSaveToken = (serverId: string) => {
     const cfg = TOKEN_CONFIG[serverId];
     const val = tokenInputs[serverId]?.trim();
     if (!cfg || !val) return;
-    sessionStorage.setItem(cfg.storageKey, val);
+    localStorage.setItem(cfg.storageKey, val);
     if (cfg.secondaryKey) {
       const secondaryVal = tokenInputs[`${serverId}_secondary`]?.trim();
-      if (secondaryVal) sessionStorage.setItem(cfg.secondaryKey, secondaryVal);
+      if (secondaryVal) localStorage.setItem(cfg.secondaryKey, secondaryVal);
     }
     if (cfg.regionKey) {
       const regionVal = tokenInputs[`${serverId}_region`]?.trim();
-      if (regionVal) sessionStorage.setItem(cfg.regionKey, regionVal);
+      if (regionVal) localStorage.setItem(cfg.regionKey, regionVal);
     }
     setSavedFlags(p => ({ ...p, [serverId]: true }));
     const server = servers.find(s => s.id === serverId);
@@ -327,7 +327,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
   const handleTestTool = async (serverId: string, toolName: string) => {
     const cfg = TOKEN_CONFIG[serverId];
     if (!cfg) return;
-    const token = sessionStorage.getItem(cfg.storageKey) || tokenInputs[serverId];
+    const token = localStorage.getItem(cfg.storageKey) || tokenInputs[serverId];
     if (!token) { setTestResult({ ok: false, message: 'No token configured' }); return; }
 
     setTesting(true);
@@ -340,8 +340,8 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
           : serverId === 'mcp-supabase' && toolName === 'supabase_list_projects'
             ? {}
             : {};
-      const secondaryVal = cfg.secondaryKey ? (sessionStorage.getItem(cfg.secondaryKey) || tokenInputs[`${serverId}_secondary`]) : undefined;
-      const regionVal = cfg.regionKey ? (sessionStorage.getItem(cfg.regionKey) || 'us-east-1') : undefined;
+      const secondaryVal = cfg.secondaryKey ? (localStorage.getItem(cfg.secondaryKey) || tokenInputs[`${serverId}_secondary`]) : undefined;
+      const regionVal = cfg.regionKey ? (localStorage.getItem(cfg.regionKey) || 'us-east-1') : undefined;
       const result = await callMCPTool({
         tool: toolName,
         input: defaultInput,
@@ -375,7 +375,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         airtableToken: serverId === 'mcp-airtable' ? token : undefined,
         jiraApiToken: serverId === 'mcp-jira' ? token : undefined,
         jiraEmail: serverId === 'mcp-jira' ? secondaryVal : undefined,
-        jiraDomain: serverId === 'mcp-jira' ? (sessionStorage.getItem('jira_domain') || tokenInputs[`${serverId}_region`]) : undefined,
+        jiraDomain: serverId === 'mcp-jira' ? (localStorage.getItem('jira_domain') || tokenInputs[`${serverId}_region`]) : undefined,
         sfAccessToken: serverId === 'mcp-salesforce' ? token : undefined,
         sfInstanceUrl: serverId === 'mcp-salesforce' ? secondaryVal : undefined,
         hubspotToken: serverId === 'mcp-hubspot' ? token : undefined,
@@ -390,7 +390,7 @@ export function MCPConfig({ servers, onToggleServer, onClose }: MCPConfigProps) 
         etherscanChain: serverId === 'mcp-contract-intel' ? (secondaryVal || 'ethereum') : undefined,
         solanaRpcUrl: serverId === 'mcp-solana' ? (token || undefined) : undefined,
         tenderlyKey: serverId === 'mcp-tx-simulator' ? secondaryVal : undefined,
-        tenderlyAccount: serverId === 'mcp-tx-simulator' ? (sessionStorage.getItem('tenderly_account') || tokenInputs[`${serverId}_region`]) : undefined,
+        tenderlyAccount: serverId === 'mcp-tx-simulator' ? (localStorage.getItem('tenderly_account') || tokenInputs[`${serverId}_region`]) : undefined,
       });
       if (result.ok) {
         const r = result.result as Record<string, unknown>;
