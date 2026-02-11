@@ -36,9 +36,6 @@ export default function Hero({
           <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3.5 py-1 text-xs font-medium text-primary tracking-wide">
             {badgeText}
           </span>
-          <span className="hidden sm:inline-flex items-center rounded-full border border-border/40 bg-muted/30 px-3 py-1 text-[11px] font-mono text-muted-foreground/60 tracking-wider">
-            Deterministic build runtime
-          </span>
         </div>
 
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
@@ -75,6 +72,16 @@ export default function Hero({
   );
 }
 
+function stylizeText(text: string) {
+  return text.split("").map((char, i) =>
+    char === "o" ? (
+      <span key={i} className="font-mono">ø</span>
+    ) : (
+      <React.Fragment key={i}>{char}</React.Fragment>
+    )
+  );
+}
+
 function renderTitleWithAccent(title: string) {
   const lines = title.split("\n");
   return (
@@ -86,10 +93,10 @@ function renderTitleWithAccent(title: string) {
             {parts.map((p, idx) =>
               p === "AI agents" ? (
                 <span key={idx} className="text-primary">
-                  {p}
+                  {stylizeText(p)}
                 </span>
               ) : (
-                <span key={idx}>{p}</span>
+                <span key={idx}>{stylizeText(p)}</span>
               )
             )}
             {i < lines.length - 1 ? <br /> : null}
