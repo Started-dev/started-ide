@@ -46,7 +46,7 @@ export default function Auth() {
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#0d0d0f]">
       {/* ── Top Nav ── */}
-      <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-4 mx-4 md:mx-8 mt-3 rounded-2xl border border-white/[0.06] bg-[#0d0d0f]/80 backdrop-blur-md">
+      <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-4 mx-4 md:mx-8 mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.04] backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
         <div className="flex items-center">
           <img src={startedWordmark} alt="Started" className="h-10" />
         </div>
