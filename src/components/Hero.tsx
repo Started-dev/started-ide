@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import ideMock from "@/assets/ide-hero-mock.png";
+import ideScreenshot from "@/assets/ide-screenshot-real.png";
 
 type HeroProps = {
   onCtaPrimary?: () => void;
@@ -42,9 +42,9 @@ export default function Hero({ onCtaPrimary }: HeroProps) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-          className="mt-20 sm:mt-28 mx-auto max-w-[900px]"
+          className="mt-20 sm:mt-28 mx-auto w-full max-w-[1100px]"
         >
-          <div className="rounded-xl border border-[hsl(38,92%,50%,0.1)] bg-[#131316] shadow-[0_8px_40px_rgba(0,0,0,0.5)] overflow-hidden">
+          <div className="rounded-xl border border-[hsl(38,92%,50%,0.15)] bg-[#131316] shadow-[0_12px_60px_rgba(0,0,0,0.6)] overflow-hidden">
             {/* Title bar */}
             <div className="flex items-center px-4 py-3 border-b border-white/[0.06]">
               <div className="flex items-center gap-1.5">
@@ -60,10 +60,10 @@ export default function Hero({ onCtaPrimary }: HeroProps) {
 
             {/* Screenshot */}
             <img
-              src={ideMock}
+              src={ideScreenshot}
               alt="Started IDE — AI-powered development environment"
               className="w-full h-auto block"
-              loading="lazy"
+              loading="eager"
             />
           </div>
         </motion.div>
