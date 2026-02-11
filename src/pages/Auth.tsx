@@ -44,6 +44,15 @@ export default function Auth() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
+      {/* ── Dot grid pattern ── */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.035]"
+        style={{
+          backgroundImage: 'radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
       {/* ── Background glow ── */}
       <div
         className="absolute inset-0 pointer-events-none"
