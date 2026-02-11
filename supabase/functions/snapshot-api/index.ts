@@ -289,8 +289,8 @@ serve(async (req) => {
     if (!user) return json({ error: "Unauthorized" }, 401);
 
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") || (await req.json().then((b) => b.action).catch(() => ""));
-    const body = req.method === "POST" ? await req.clone().json().catch(() => ({})) : {};
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    const action = url.searchParams.get("action") || body.action || "";
     const db = getServiceClient();
 
     switch (action) {
