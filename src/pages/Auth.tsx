@@ -96,14 +96,13 @@ export default function Auth() {
 
           {/* Headline */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
-            Build software with{' '}
-            <span className="text-primary">autonomous AI</span>{' '}
-            agents.
+            Ship production software with{' '}
+            <span className="text-primary">AI agents</span>.
           </h1>
 
           {/* Subtext */}
           <p className="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed">
-            Plan, generate, and ship production-ready code in a live development environment.
+            Plan, generate, verify, and deploy real applications — inside a live AI-native development environment.
           </p>
 
           {/* CTAs */}
