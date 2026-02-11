@@ -201,6 +201,33 @@ export async function runCommandRemote({ command, cwd, timeoutS, projectId, file
   }
 }
 
+// ─── Agent Polling (reconnection after browser close) ───
+
+export interface AgentRunStatus {
+  run: { id: string; goal: string; status: string; current_step: number; max_steps: number; created_at: string; error_message?: string } | null;
+  steps: Array<{ id: string; step_index: number; kind: string; title: string; status: string; duration_ms?: number; input?: unknown; output?: unknown }>;
+}
+
+export async function getAgentRunStatus(runId: string): Promise<AgentRunStatus> {
+  const token = await getAuthToken();
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run?run_id=${encodeURIComponent(runId)}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  return { run: data.run, steps: data.steps || [] };
+}
+
+export async function cancelAgentRun(runId: string): Promise<void> {
+  const token = await getAuthToken();
+  await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ run_id: runId }),
+  });
+}
+
 // ─── Agent Streaming ───
 
 export interface AgentStepEvent {
@@ -222,13 +249,14 @@ interface StreamAgentOptions {
   onPatch: (diff: string, summary: string) => void;
   onRunCommand: (command: string, summary: string) => void;
   onMCPCall?: (server: string, tool: string, input: Record<string, unknown>) => void;
+  onRunStarted?: (runId: string) => void;
   onDone: (reason: string) => void;
   onError: (reason: string) => void;
   signal?: AbortSignal;
 }
 
 export async function streamAgent({
-  goal, files, maxIterations, presetKey, model, mcpTools, onStep, onPatch, onRunCommand, onMCPCall, onDone, onError, signal,
+  goal, files, maxIterations, presetKey, model, mcpTools, onStep, onPatch, onRunCommand, onMCPCall, onRunStarted, onDone, onError, signal,
 }: StreamAgentOptions) {
   const token = await getAuthToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
@@ -267,7 +295,9 @@ export async function streamAgent({
         if (!line.startsWith('data: ')) continue;
         try {
           const parsed = JSON.parse(line.slice(6));
-          if (parsed.type === 'step') {
+          if (parsed.type === 'run_started' && onRunStarted) {
+            onRunStarted(parsed.run_id);
+          } else if (parsed.type === 'step') {
             onStep(parsed.step, parsed.iteration);
           } else if (parsed.type === 'patch') {
             onPatch(parsed.diff, parsed.summary);
