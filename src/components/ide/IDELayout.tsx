@@ -7,6 +7,8 @@ import {
   Rocket, Activity, Globe2, Plug, GitBranch, Eye, EyeOff,
 } from 'lucide-react';
 import startedWordmark from '@/assets/started-wordmark.svg';
+import startedWordmarkLight from '@/assets/started-wordmark-light.svg';
+import { useTheme } from 'next-themes';
 import { FileTree } from './FileTree';
 import { EditorPane } from './EditorPane';
 import { ChatPanel } from './ChatPanel';
@@ -49,6 +51,8 @@ export function IDELayout() {
   const { signOut, user } = useAuth();
 
   useOpenClawEvents(project?.id);
+  const { resolvedTheme } = useTheme();
+  const wordmark = resolvedTheme === 'light' ? startedWordmarkLight : startedWordmark;
 
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [showProjectSwitcher, setShowProjectSwitcher] = useState(false);
@@ -112,7 +116,7 @@ export function IDELayout() {
       <div className="flex items-center justify-between px-3 h-11 bg-ide-panel-header border-b border-border shrink-0">
         {/* LEFT: Logo + Project + Branch + ⌘K */}
         <div className="flex items-center gap-2.5">
-          <img src={startedWordmark} alt="Started" className="h-6 opacity-90" />
+          <img src={wordmark} alt="Started" className="h-6 opacity-90" />
 
           <div className="w-px h-5 bg-border" />
 

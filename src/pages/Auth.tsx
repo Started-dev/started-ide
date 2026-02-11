@@ -6,9 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Hero from '@/components/Hero';
 import startedWordmark from '@/assets/started-wordmark.svg';
+import startedWordmarkLight from '@/assets/started-wordmark-light.svg';
+import { useTheme } from 'next-themes';
 
 export default function Auth() {
   const { user, loading, signIn, signUp } = useAuth();
+  const { resolvedTheme } = useTheme();
+  const wordmark = resolvedTheme === 'light' ? startedWordmarkLight : startedWordmark;
   const [showAuth, setShowAuth] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -48,7 +52,7 @@ export default function Auth() {
       {/* ── Top Nav ── */}
       <nav className="relative z-10 flex items-center justify-between px-6 md:px-10 py-4 mx-4 md:mx-8 mt-3 rounded-2xl border border-white/[0.06] bg-white/[0.04] backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
         <div className="flex items-center">
-          <img src={startedWordmark} alt="Started" className="h-10" />
+          <img src={wordmark} alt="Started" className="h-10" />
         </div>
         <div className="flex items-center gap-6">
           <a
