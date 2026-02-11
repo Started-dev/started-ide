@@ -75,15 +75,16 @@ export function useProjectHooks(projectId: string | null) {
   // Load webhook secrets
   const loadSecrets = useCallback(async () => {
     if (!projectId) return;
+    // Read from the masked view — tokens show as "••••••••<last8>"
     const { data } = await supabase
-      .from('project_webhook_secrets')
+      .from('project_webhook_secrets_safe' as any)
       .select('*')
       .eq('project_id', projectId);
     if (data) {
-      setWebhookSecrets(data.map(r => ({
+      setWebhookSecrets((data as any[]).map(r => ({
         id: r.id,
         projectId: r.project_id,
-        token: r.token,
+        token: r.token_masked, // masked token for display
         label: r.label,
         createdAt: new Date(r.created_at),
       })));

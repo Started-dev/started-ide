@@ -1407,7 +1407,38 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      project_webhook_secrets_safe: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          label: string | null
+          project_id: string | null
+          token_masked: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          label?: string | null
+          project_id?: string | null
+          token_masked?: never
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          label?: string | null
+          project_id?: string | null
+          token_masked?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_webhook_secrets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       increment_usage: {
