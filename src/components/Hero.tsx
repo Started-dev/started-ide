@@ -38,7 +38,7 @@ export default function Hero({
         </motion.div>
 
         {/* IDE Screenshot */}
-        <motion.div initial={{
+      <motion.div initial={{
         opacity: 0,
         y: 30
       }} animate={{
@@ -48,7 +48,7 @@ export default function Hero({
         duration: 0.8,
         delay: 0.3,
         ease: "easeOut"
-      }} className="mt-20 sm:mt-28 mx-auto w-full max-w-[1100px]">
+      }} className="mt-20 sm:mt-28 w-[calc(100%+6rem)] -mx-12 sm:w-[calc(100%+12rem)] sm:-mx-24 max-w-none">
           <div className="rounded-xl border border-[hsl(38,92%,50%,0.15)] bg-[#131316] shadow-[0_12px_60px_rgba(0,0,0,0.6)] overflow-hidden">
             {/* Title bar */}
             <div className="flex items-center px-4 py-3 border-b border-white/[0.06]">
