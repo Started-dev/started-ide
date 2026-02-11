@@ -241,18 +241,18 @@ async function callAnthropic(
   return response;
 }
 
-// ─── Call Lovable Gateway ───
+// ─── Call Started Gateway ───
 async function callGateway(
   model: string,
   allMessages: Array<{ role: string; content: string }>
 ): Promise<Response> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+  const STARTED_API_KEY = Deno.env.get("STARTED_API_KEY") || Deno.env.get("LOVABLE_API_KEY");
+  if (!STARTED_API_KEY) throw new Error("STARTED_API_KEY is not configured");
 
   return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${STARTED_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -352,7 +352,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     } else {
-      // Lovable Gateway (StartedAI resolved to gemini-3-pro, or passthrough)
+      // Started Gateway (StartedAI resolved to gemini-3-flash, or passthrough)
       const resolvedModel = resolveModel(selectedModel);
       const allMessages = [
         { role: "system", content: systemPrompt },

@@ -235,18 +235,18 @@ async function callAnthropicJSON(
   return { ok: true, status: 200, content };
 }
 
-// ─── Call Lovable Gateway (non-streaming, JSON mode) ───
+// ─── Call Started Gateway (non-streaming, JSON mode) ───
 async function callGatewayJSON(
   model: string,
   messages: Array<{ role: string; content: string }>
 ): Promise<{ ok: boolean; status: number; content: string }> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+  const STARTED_API_KEY = Deno.env.get("STARTED_API_KEY") || Deno.env.get("LOVABLE_API_KEY");
+  if (!STARTED_API_KEY) throw new Error("STARTED_API_KEY is not configured");
 
   const response = await fetch(GATEWAY_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      Authorization: `Bearer ${STARTED_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

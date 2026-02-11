@@ -71,7 +71,7 @@ function InstallWizard({ projectId, onConnected }: { projectId: string; onConnec
   }, [logs]);
 
   const startInstall = async () => {
-    const key = useGateway ? 'lovable-gateway' : llmKey;
+    const key = useGateway ? 'started-gateway' : llmKey;
     if (!key) { toast({ title: 'Enter an LLM key or use the gateway', variant: 'destructive' }); return; }
     setInstalling(true);
     try {
