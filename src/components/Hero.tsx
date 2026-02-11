@@ -17,7 +17,7 @@ export default function Hero({ onCtaPrimary }: HeroProps) {
           className="flex flex-col items-start gap-6"
         >
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-medium tracking-tight text-white leading-[1.08]">
-            Ship real s<span className="font-mono text-[hsl(38,92%,50%)]">ø</span>ftware.
+            Ship real s<span className="font-mono text-[hsl(38,92%,50%)]">ø</span>ftware<span className="text-[hsl(38,92%,50%)]">.</span>
           </h1>
 
           <p className="text-base sm:text-lg text-gray-400 max-w-md">
