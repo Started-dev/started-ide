@@ -539,7 +539,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Fallback to project_files table
-      if (initialFiles && initialFiles.length > 0) {
+      if (initialFiles && initialFiles.length > 0 && initialFiles.some(f => f.content?.trim())) {
         setFiles(initialFiles);
         // Seed the CA snapshot model with existing files
         caSnapshots.createCASnapshot(initialFiles, 'Initial migration from project_files');
@@ -551,7 +551,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
           setOpenTabs([]);
           setActiveTabId(null);
         }
-      } else if (projectId && !initialFiles) {
+      } else if (projectId) {
         // New blank project — only STARTED.md
         setFiles(BLANK_PROJECT_FILES);
         saveAllFiles(BLANK_PROJECT_FILES);
