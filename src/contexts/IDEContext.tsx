@@ -1246,6 +1246,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
           status: step.status as AgentStep['status'],
           startedAt: new Date(),
           completedAt: step.status === 'completed' || step.status === 'failed' ? new Date() : undefined,
+          iteration,
         });
         setAgentRun(prev => prev ? { ...prev, iteration } : null);
       },

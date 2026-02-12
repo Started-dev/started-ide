@@ -15,6 +15,7 @@ export interface AgentStep {
   startedAt?: Date;
   completedAt?: Date;
   durationMs?: number;
+  iteration?: number;
 }
 
 export interface AgentFileChange {

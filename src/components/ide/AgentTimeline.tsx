@@ -1,10 +1,7 @@
-import { 
-  Brain, Wrench, FileCode, Play, CheckCircle, XCircle, 
-  Loader2, SkipForward, Square, Clock, Zap, AlertTriangle,
-  FilePlus2, FileEdit, Eye, FlaskConical, Pencil, Link
-} from 'lucide-react';
-import { AgentRun, AgentStep, AgentStepType } from '@/types/agent';
-import { getWeb3OpType, type Web3OpType } from '@/lib/tool-executor';
+import { useState, useMemo } from 'react';
+import { Brain, Play, Square, Clock, Zap, ChevronRight, ChevronDown, CheckCircle2, FileCode, Terminal, Loader2 } from 'lucide-react';
+import { AgentRun, AgentStep } from '@/types/agent';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 interface AgentTimelineProps {
   agentRun: AgentRun | null;
@@ -14,66 +11,194 @@ interface AgentTimelineProps {
   onNewRun?: () => void;
 }
 
-const stepIcon: Record<AgentStepType, React.ReactNode> = {
-  think: <Brain className="h-3.5 w-3.5" />,
-  tool_call: <Wrench className="h-3.5 w-3.5" />,
-  patch: <FileCode className="h-3.5 w-3.5" />,
-  run: <Play className="h-3.5 w-3.5" />,
-  evaluate: <Zap className="h-3.5 w-3.5" />,
-  done: <CheckCircle className="h-3.5 w-3.5" />,
-  error: <AlertTriangle className="h-3.5 w-3.5" />,
-  mcp_call: <Wrench className="h-3.5 w-3.5" />,
-};
+// ─── Group steps by iteration ───
 
-const statusColors: Record<AgentStep['status'], string> = {
-  pending: 'text-muted-foreground',
-  running: 'text-ide-warning',
-  completed: 'text-ide-success',
-  failed: 'text-ide-error',
-  skipped: 'text-muted-foreground/50',
-};
+interface IterationGroup {
+  iteration: number;
+  steps: AgentStep[];
+}
 
-// ─── Web3 Operation Type Badge ───
+function groupByIteration(steps: AgentStep[]): IterationGroup[] {
+  const groups: IterationGroup[] = [];
+  let currentIteration = -1;
 
-const web3OpConfig: Record<Web3OpType, { label: string; icon: React.ReactNode; bg: string; text: string }> = {
-  READ: {
-    label: 'READ',
-    icon: <Eye className="h-2.5 w-2.5" />,
-    bg: 'bg-emerald-500/15',
-    text: 'text-emerald-400',
-  },
-  SIMULATE: {
-    label: 'SIM',
-    icon: <FlaskConical className="h-2.5 w-2.5" />,
-    bg: 'bg-sky-500/15',
-    text: 'text-sky-400',
-  },
-  WRITE: {
-    label: 'WRITE',
-    icon: <Pencil className="h-2.5 w-2.5" />,
-    bg: 'bg-amber-500/15',
-    text: 'text-amber-400',
-  },
-};
+  for (const step of steps) {
+    const iter = step.iteration ?? 0;
+    if (iter !== currentIteration) {
+      groups.push({ iteration: iter, steps: [step] });
+      currentIteration = iter;
+    } else {
+      groups[groups.length - 1].steps.push(step);
+    }
+  }
+  return groups;
+}
 
-function Web3OpBadge({ toolName }: { toolName: string }) {
-  const opType = getWeb3OpType(toolName);
-  if (!opType) return null;
-  const cfg = web3OpConfig[opType];
+function getIterationLabel(steps: AgentStep[]): string {
+  const thinkStep = steps.find(s => s.type === 'think');
+  if (thinkStep?.detail) {
+    const preview = thinkStep.detail.slice(0, 60);
+    return preview.length < thinkStep.detail.length ? `${preview}...` : preview;
+  }
+  const firstLabel = steps[0]?.label;
+  if (firstLabel) return firstLabel.slice(0, 60);
+  return 'Processing...';
+}
+
+// ─── Iteration Section ───
+
+function IterationSection({ group, isLatest, onOpenFile }: {
+  group: IterationGroup;
+  isLatest: boolean;
+  onOpenFile?: (path: string) => void;
+}) {
+  const [open, setOpen] = useState(isLatest);
+  const label = getIterationLabel(group.steps);
+  const hasRunning = group.steps.some(s => s.status === 'running');
+
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider ${cfg.bg} ${cfg.text}`}>
-      {cfg.icon}
-      {cfg.label}
-    </span>
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="flex items-center gap-1.5 w-full py-1.5 text-left hover:bg-muted/30 rounded-sm px-1 transition-colors group">
+        {open ? (
+          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+        )}
+        <span className="text-xs font-medium text-foreground">
+          Iteration {group.iteration}:
+        </span>
+        <span className="text-xs text-muted-foreground truncate flex-1">
+          {label}
+        </span>
+        {hasRunning && (
+          <Loader2 className="h-3 w-3 text-primary animate-spin shrink-0" />
+        )}
+      </CollapsibleTrigger>
+
+      <CollapsibleContent>
+        <div className="pl-5 space-y-0.5 pb-1">
+          {group.steps.map((step) => (
+            <StepLine key={step.id} step={step} onOpenFile={onOpenFile} />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
-function isWeb3MCP(detail?: string): boolean {
-  if (!detail) return false;
-  return /^(evm_|contract_|solana_|sim_|wallet_)/.test(detail);
+// ─── Individual Step Line ───
+
+function StepLine({ step, onOpenFile }: { step: AgentStep; onOpenFile?: (path: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (step.type === 'think') {
+    return (
+      <div className="py-0.5">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-left w-full hover:opacity-80 transition-opacity"
+        >
+          <span className="text-[11px] font-semibold text-primary">Thinking:</span>
+          <span className="text-[11px] text-muted-foreground truncate flex-1">
+            {step.detail?.slice(0, 80) || step.label}
+          </span>
+        </button>
+        {expanded && step.detail && (
+          <pre className="text-[10px] text-muted-foreground/80 mt-1 ml-0.5 whitespace-pre-wrap font-mono leading-relaxed max-h-48 overflow-auto">
+            {step.detail}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
+  if (step.type === 'run') {
+    return (
+      <div className="py-0.5">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-left w-full hover:opacity-80 transition-opacity"
+        >
+          <Terminal className="h-2.5 w-2.5 text-ide-success shrink-0" />
+          <span className="text-[11px] font-semibold text-ide-success">Running:</span>
+          <span className="text-[11px] text-muted-foreground font-mono truncate flex-1">
+            {step.detail || step.label}
+          </span>
+          {step.status === 'running' && <Loader2 className="h-2.5 w-2.5 text-primary animate-spin shrink-0" />}
+        </button>
+        {expanded && step.detail && (
+          <pre className="text-[10px] text-muted-foreground/70 mt-1 ml-4 whitespace-pre-wrap font-mono leading-relaxed max-h-36 overflow-auto bg-muted/30 rounded p-1.5">
+            {step.detail}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
+  if (step.type === 'patch') {
+    return (
+      <div className="py-0.5">
+        <div className="flex items-center gap-1">
+          <FileCode className="h-2.5 w-2.5 text-primary shrink-0" />
+          <span className="text-[11px] font-semibold text-primary">Patch:</span>
+          <span className="text-[11px] text-muted-foreground truncate">
+            {step.label}
+          </span>
+        </div>
+        {step.filesChanged && step.filesChanged.length > 0 && (
+          <div className="ml-4 mt-0.5 space-y-0">
+            {step.filesChanged.map((fc) => (
+              <button
+                key={fc.path}
+                onClick={() => onOpenFile?.(fc.path)}
+                className="block text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {fc.action === 'created' ? '+' : '~'} {fc.path}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (step.type === 'evaluate') {
+    return (
+      <div className="flex items-center gap-1 py-0.5">
+        <Zap className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+        <span className="text-[11px] text-muted-foreground">{step.label}</span>
+      </div>
+    );
+  }
+
+  if (step.type === 'error') {
+    return (
+      <div className="flex items-center gap-1 py-0.5">
+        <span className="text-[11px] text-ide-error">✕ {step.label}</span>
+        {step.detail && <span className="text-[10px] text-muted-foreground truncate">{step.detail}</span>}
+      </div>
+    );
+  }
+
+  // tool_call, mcp_call, or fallback
+  return (
+    <div className="flex items-center gap-1 py-0.5">
+      <span className="text-[11px] text-muted-foreground">
+        {step.label}
+      </span>
+      {step.status === 'running' && <Loader2 className="h-2.5 w-2.5 text-primary animate-spin shrink-0" />}
+    </div>
+  );
 }
 
+// ─── Main Component ───
+
 export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun }: AgentTimelineProps) {
+  const iterationGroups = useMemo(
+    () => agentRun ? groupByIteration(agentRun.steps) : [],
+    [agentRun?.steps]
+  );
+
   if (!agentRun) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground text-sm p-6">
@@ -101,6 +226,7 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun 
   const elapsed = agentRun.completedAt
     ? agentRun.completedAt.getTime() - agentRun.startedAt.getTime()
     : Date.now() - agentRun.startedAt.getTime();
+  const doneStep = agentRun.steps.find(s => s.type === 'done');
 
   return (
     <div className="h-full flex flex-col bg-card">
@@ -108,9 +234,9 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun 
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2 min-w-0">
           <Brain className="h-4 w-4 text-primary shrink-0" />
-          <span className="text-xs font-semibold uppercase tracking-wider truncate">Agent</span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-sm ${
-            isActive ? 'bg-ide-warning/15 text-ide-warning animate-pulse' :
+          <span className="text-xs font-semibold uppercase tracking-wider">Agent</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium ${
+            isActive ? 'bg-primary/15 text-primary' :
             agentRun.status === 'completed' ? 'bg-ide-success/15 text-ide-success' :
             agentRun.status === 'failed' ? 'bg-ide-error/15 text-ide-error' :
             'bg-muted text-muted-foreground'
@@ -122,13 +248,13 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun 
           <div className="flex items-center gap-1">
             <button
               onClick={onPause}
-              className="px-2 py-0.5 text-[10px] bg-ide-warning/10 text-ide-warning rounded-sm hover:bg-ide-warning/20 transition-colors"
+              className="px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
             >
               Pause
             </button>
             <button
               onClick={onStop}
-              className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-ide-error/10 text-ide-error rounded-sm hover:bg-ide-error/20 transition-colors"
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-ide-error hover:bg-ide-error/10 rounded-sm transition-colors"
             >
               <Square className="h-2.5 w-2.5" />
               Stop
@@ -137,7 +263,7 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun 
         ) : onNewRun ? (
           <button
             onClick={onNewRun}
-            className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-primary/10 text-primary rounded-sm hover:bg-primary/20 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/10 rounded-sm transition-colors"
           >
             <Play className="h-2.5 w-2.5" />
             New Run
@@ -147,7 +273,7 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun 
 
       {/* Goal & Meta */}
       <div className="px-3 py-2 border-b border-border space-y-1">
-        <p className="text-xs text-foreground font-medium truncate" title={agentRun.goal}>
+        <p className="text-xs text-foreground font-medium" title={agentRun.goal}>
           {agentRun.goal}
         </p>
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -163,99 +289,39 @@ export function AgentTimeline({ agentRun, onStop, onPause, onOpenFile, onNewRun 
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="flex-1 overflow-auto px-3 py-2">
-        <div className="relative">
-          {/* Vertical line */}
-          <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
+      {/* Iteration Groups */}
+      <div className="flex-1 overflow-auto px-2 py-2 space-y-0.5">
+        {iterationGroups.map((group, idx) => (
+          <IterationSection
+            key={`iter-${group.iteration}-${idx}`}
+            group={group}
+            isLatest={idx === iterationGroups.length - 1}
+            onOpenFile={onOpenFile}
+          />
+        ))}
 
-          <div className="space-y-1">
-            {agentRun.steps.map((step) => (
-              <div key={step.id} className="relative flex items-start gap-2.5 py-1">
-                {/* Dot */}
-                <div className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-full shrink-0 ${
-                  step.status === 'running' ? 'bg-ide-warning/20' :
-                  step.status === 'completed' ? 'bg-ide-success/20' :
-                  step.status === 'failed' ? 'bg-ide-error/20' :
-                  'bg-muted'
-                }`}>
-                  {step.status === 'running' ? (
-                    <Loader2 className="h-2.5 w-2.5 text-ide-warning animate-spin" />
-                  ) : (
-                    <span className={statusColors[step.status]}>
-                      {stepIcon[step.type]}
-                    </span>
-                  )}
-                </div>
+        {/* Active indicator */}
+        {isActive && (
+          <div className="flex items-center gap-2 py-1.5 px-1">
+            <Loader2 className="h-3 w-3 text-primary animate-spin" />
+            <span className="text-xs text-muted-foreground italic">Working...</span>
+          </div>
+        )}
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-medium ${statusColors[step.status]}`}>
-                      {step.label}
-                    </span>
-                    {/* Web3 op-type badge */}
-                    {step.type === 'tool_call' && step.detail && isWeb3MCP(step.detail) && (
-                      <Web3OpBadge toolName={step.detail.split('(')[0].trim()} />
-                    )}
-                    {/* Web3 chain indicator */}
-                    {step.type === 'tool_call' && step.detail && isWeb3MCP(step.detail) && (
-                      <span className="inline-flex items-center gap-0.5 text-[9px] text-muted-foreground">
-                        <Link className="h-2 w-2" />
-                        Web3
-                      </span>
-                    )}
-                    {step.durationMs !== undefined && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {step.durationMs < 1000 ? `${step.durationMs}ms` : `${(step.durationMs / 1000).toFixed(1)}s`}
-                      </span>
-                    )}
-                  </div>
-                  {step.detail && (
-                    <p className="text-[11px] text-muted-foreground mt-0.5 font-mono truncate">
-                      {step.detail}
-                    </p>
-                  )}
-
-                  {/* File changes indicator */}
-                  {step.filesChanged && step.filesChanged.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {step.filesChanged.map((fc) => (
-                        <button
-                          key={fc.path}
-                          onClick={() => onOpenFile?.(fc.path)}
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono cursor-pointer hover:opacity-80 transition-opacity ${
-                            fc.action === 'created'
-                              ? 'bg-ide-success/10 text-ide-success'
-                              : 'bg-ide-info/10 text-ide-info'
-                          }`}
-                          title={`Click to open · ${fc.action}: ${fc.path}`}
-                        >
-                          {fc.action === 'created' ? (
-                            <FilePlus2 className="h-2.5 w-2.5" />
-                          ) : (
-                            <FileEdit className="h-2.5 w-2.5" />
-                          )}
-                          {fc.path.split('/').pop()}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* Running indicator */}
-            {isActive && (
-              <div className="relative flex items-center gap-2.5 py-1">
-                <div className="relative z-10 w-4 h-4 flex items-center justify-center">
-                  <div className="h-2 w-2 rounded-full bg-ide-warning animate-pulse" />
-                </div>
-                <span className="text-xs text-muted-foreground italic">Working...</span>
-              </div>
+        {/* Goal completed summary */}
+        {agentRun.status === 'completed' && (
+          <div className="mt-2 px-1 py-2 border-t border-border">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CheckCircle2 className="h-3.5 w-3.5 text-ide-success" />
+              <span className="text-xs font-medium text-ide-success">Goal completed</span>
+            </div>
+            {doneStep?.detail && (
+              <p className="text-[11px] text-muted-foreground leading-relaxed pl-5">
+                {doneStep.detail}
+              </p>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
