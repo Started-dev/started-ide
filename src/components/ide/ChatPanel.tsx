@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, AtSign, FileCode, AlertCircle, Brain, X, Globe, Image, Link, Paperclip, Sparkles } from 'lucide-react';
+import { Send, AtSign, FileCode, AlertCircle, Brain, X, Globe, Image, Link, Paperclip, Sparkles, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useIDE } from '@/contexts/IDEContext';
@@ -310,59 +311,66 @@ export function ChatPanel() {
       {/* Suggestion cards */}
       <SuggestionCards inputLength={input.length} onSendMessage={(msg) => handleSend(msg)} />
 
-      {/* Context strip */}
-      <ContextStrip />
-
-      {/* Active skills indicator */}
-      {activeSkills.length > 0 && (
-        <div className="px-3 pb-1">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] rounded-full border border-primary/20">
-            <Sparkles className="h-2.5 w-2.5" />
-            {activeSkills.length} skill{activeSkills.length !== 1 ? 's' : ''} active
-          </span>
-        </div>
-      )}
-
-      {/* Context chips */}
-      {chips.length > 0 && (
-        <div className="px-3 pb-1 flex flex-wrap gap-1">
-          {chips.map((chip, i) => (
-            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/15 text-primary text-[11px] rounded-sm cursor-pointer hover:bg-primary/25 transition-colors duration-150" onClick={() => removeChip(i)}>
-              {chipIcon(chip.type)}
-              {chip.label}
-              <X className="h-2.5 w-2.5" />
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Hidden file inputs */}
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
       <input ref={attachInputRef} type="file" className="hidden" onChange={handleAttachmentUpload} />
 
-      {/* Input */}
-      <div className="border-t border-border p-3 space-y-2">
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={() => addChip('selection')} className={`text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 ${selectedText ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-muted text-muted-foreground'}`} disabled={!selectedText}>@selection</button>
-          <button onClick={() => addChip('file')} className={`text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 ${activeTabId ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-muted text-muted-foreground'}`} disabled={!activeTabId}>@file</button>
-          <button onClick={() => addChip('errors')} className={`text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 ${runs.length > 0 ? 'bg-primary/10 text-primary hover:bg-primary/20' : 'bg-muted text-muted-foreground'}`} disabled={runs.length === 0}>@errors</button>
-          <button onClick={() => addChip('url')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@url</button>
-          <button onClick={() => addChip('web')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@web</button>
-          <button onClick={() => addChip('image')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@image</button>
-          <button onClick={() => addChip('attachment')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@attach</button>
-          <div className="flex-1" />
-          <ModelSelector value={selectedModel} onChange={setSelectedModel} />
-          <button
-            onClick={() => setAgentMode(prev => !prev)}
-            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 ${
-              agentMode ? 'bg-ide-warning/15 text-ide-warning' : 'bg-muted text-muted-foreground hover:bg-accent'
-            }`}
-          >
-            <Brain className="h-3 w-3" />
-            {agentMode ? 'Agent ON' : 'Agent'}
-          </button>
-        </div>
-        <div className="flex gap-2 items-end">
+      {/* Input area */}
+      <div className="border-t border-border px-3 pt-2 pb-2 space-y-1.5">
+        {/* Attached context chips + active skills — only when present */}
+        {(chips.length > 0 || activeSkills.length > 0) && (
+          <div className="flex flex-wrap gap-1">
+            {chips.map((chip, i) => (
+              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/15 text-primary text-[10px] rounded-full cursor-pointer hover:bg-primary/25 transition-colors duration-150" onClick={() => removeChip(i)}>
+                {chipIcon(chip.type)}
+                {chip.label}
+                <X className="h-2.5 w-2.5" />
+              </span>
+            ))}
+            {activeSkills.length > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] rounded-full border border-primary/20">
+                <Sparkles className="h-2.5 w-2.5" />
+                {activeSkills.length} skill{activeSkills.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Main input row */}
+        <div className="flex gap-1.5 items-end">
+          {/* + context menu */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-150 shrink-0 self-center">
+                <Plus className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="start" sideOffset={6} className="w-40 p-1">
+              <button onClick={() => addChip('selection')} disabled={!selectedText} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                <AtSign className="h-3 w-3" /> Selection
+              </button>
+              <button onClick={() => addChip('file')} disabled={!activeTabId} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                <FileCode className="h-3 w-3" /> File
+              </button>
+              <button onClick={() => addChip('errors')} disabled={runs.length === 0} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                <AlertCircle className="h-3 w-3" /> Errors
+              </button>
+              <div className="h-px bg-border my-0.5" />
+              <button onClick={() => addChip('url')} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors flex items-center gap-2">
+                <Link className="h-3 w-3" /> URL
+              </button>
+              <button onClick={() => addChip('web')} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors flex items-center gap-2">
+                <Globe className="h-3 w-3" /> Web Search
+              </button>
+              <button onClick={() => addChip('image')} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors flex items-center gap-2">
+                <Image className="h-3 w-3" /> Image
+              </button>
+              <button onClick={() => addChip('attachment')} className="w-full text-left px-2.5 py-1.5 text-[11px] rounded-sm hover:bg-accent transition-colors flex items-center gap-2">
+                <Paperclip className="h-3 w-3" /> Attach File
+              </button>
+            </PopoverContent>
+          </Popover>
+
           <textarea
             ref={inputRef}
             value={input}
@@ -382,6 +390,22 @@ export function ChatPanel() {
             }`}
           >
             {agentMode ? <Brain className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {/* Footer: context strip + model selector + agent toggle */}
+        <div className="flex items-center gap-1.5">
+          <ContextStrip />
+          <div className="flex-1" />
+          <ModelSelector value={selectedModel} onChange={setSelectedModel} />
+          <button
+            onClick={() => setAgentMode(prev => !prev)}
+            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 ${
+              agentMode ? 'bg-ide-warning/15 text-ide-warning' : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            <Brain className="h-3 w-3" />
+            {agentMode ? 'Agent ON' : 'Agent'}
           </button>
         </div>
       </div>

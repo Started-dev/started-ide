@@ -91,11 +91,11 @@ export function ContextStrip() {
   if (chips.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1 px-3 py-1.5">
+    <div className="flex flex-wrap gap-1">
       {chips.map(chip => (
         <Tooltip key={chip.key}>
           <TooltipTrigger asChild>
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] border rounded-full transition-colors duration-150 group cursor-default ${
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] border rounded-full transition-colors duration-150 group cursor-default ${
               chip.key === 'runner'
                 ? 'text-ide-warning border-ide-warning/40 bg-ide-warning/10 hover:bg-ide-warning/20'
                 : 'text-muted-foreground border-border/60 bg-muted/40 hover:bg-muted/60'
@@ -106,7 +106,7 @@ export function ContextStrip() {
                 onClick={(e) => { e.stopPropagation(); setDismissed(prev => new Set(prev).add(chip.key)); }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 p-0.5 -mr-0.5 rounded-full hover:bg-muted"
               >
-                <X className="h-2.5 w-2.5" />
+                <X className="h-2 w-2" />
               </button>
             </span>
           </TooltipTrigger>
