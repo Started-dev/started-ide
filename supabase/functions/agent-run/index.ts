@@ -312,6 +312,7 @@ interface AgentRequest {
   run_id?: string;
   model?: string;
   mcp_tools?: Array<{ server: string; name: string; description: string }>;
+  skills?: Array<{ name: string; instructions: string }>;
 }
 
 function getServiceClient() {
@@ -409,7 +410,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json() as AgentRequest;
-    const { goal, project_id, files, history, maxIterations, preset_key, run_id, model, mcp_tools } = body;
+    const { goal, project_id, files, history, maxIterations, preset_key, run_id, model, mcp_tools, skills } = body;
     const selectedModel = model || "started/started-ai";
 
     if (!goal) {
@@ -456,8 +457,20 @@ serve(async (req) => {
     const max = Math.min(maxIterations || 8, 25);
     const encoder = new TextEncoder();
 
-    const fileContext = (files || []).slice(0, 20)
-      .map((f) => `--- ${f.path} ---\n${f.content}`).join("\n\n");
+    // Build file context with character cap (100k total)
+    const MAX_FILE_CONTEXT_CHARS = 100_000;
+    let fileContextChars = 0;
+    const fileContextParts: string[] = [];
+    for (const f of (files || []).slice(0, 20)) {
+      const part = `--- ${f.path} ---\n${f.content}`;
+      if (fileContextChars + part.length > MAX_FILE_CONTEXT_CHARS) {
+        fileContextParts.push(`[...truncated: ${(files || []).length - fileContextParts.length} more files omitted to stay within context limits]`);
+        break;
+      }
+      fileContextParts.push(part);
+      fileContextChars += part.length;
+    }
+    const fileContext = fileContextParts.join("\n\n");
 
     const conversationHistory: Array<{ role: string; content: string }> = [
       { role: "system", content: AGENT_SYSTEM_PROMPT },
@@ -479,10 +492,38 @@ serve(async (req) => {
       });
     }
 
+    // ─── Inject active skills into agent context ───
+    if (skills && Array.isArray(skills) && skills.length > 0) {
+      const MAX_SKILLS_CHARS = 15_000;
+      let skillsText = "";
+      for (const s of skills) {
+        const entry = `[Skill: ${s.name}]\n${s.instructions}\n\n`;
+        if (skillsText.length + entry.length > MAX_SKILLS_CHARS) {
+          skillsText += `[...truncated: ${skills.length} skills total, context cap reached]`;
+          break;
+        }
+        skillsText += entry;
+      }
+      conversationHistory.push({
+        role: "system",
+        content: `ACTIVE SKILLS:\n${skillsText}`,
+      });
+    }
+
     conversationHistory.push(
       { role: "user", content: `GOAL: ${goal}\n\nPROJECT FILES:\n${fileContext}` },
       ...(history || []),
     );
+
+    // ─── Conversation history windowing: keep last 10 iteration pairs ───
+    const MAX_HISTORY_PAIRS = 10;
+    const systemMessages = conversationHistory.filter(m => m.role === "system");
+    const nonSystemMessages = conversationHistory.filter(m => m.role !== "system");
+    if (nonSystemMessages.length > MAX_HISTORY_PAIRS * 2) {
+      const trimmed = nonSystemMessages.slice(-MAX_HISTORY_PAIRS * 2);
+      conversationHistory.length = 0;
+      conversationHistory.push(...systemMessages, { role: "user", content: "[Earlier conversation history truncated for context management]" }, ...trimmed);
+    }
 
     let totalChars = 0;
 
@@ -562,8 +603,8 @@ serve(async (req) => {
               sendEvent({ type: "step", step: { id: `step-${Date.now()}-done`, type: "done", label: "Goal completed", detail: (parsed.done_reason || parsed.summary) as string, status: "completed" }, iteration });
               sendEvent({ type: "agent_done", reason: (parsed.done_reason || parsed.summary) as string });
 
-              // ─── Generate retrospective for StartedAI runs ───
-              if (selectedModel === "started/started-ai" && agentRunId) {
+              // ─── Generate retrospective for all model runs ───
+              if (agentRunId) {
                 try {
                   const retroMessages = [
                     { role: "system", content: AGENT_RETROSPECTIVE_PROMPT },
@@ -597,14 +638,14 @@ serve(async (req) => {
               if (agentRunId) await persistStep(db, agentRunId, iteration, "patch", (parsed.summary || "Generating patch") as string, { diff: parsed.patch }, {}, "ok", stepDuration);
               sendEvent({ type: "step", step: { id: `step-${Date.now()}-patch`, type: "patch", label: "Generating patch", detail: parsed.summary as string, status: "completed" }, iteration });
               sendEvent({ type: "patch", diff: parsed.patch, summary: parsed.summary });
-              conversationHistory.push({ role: "user", content: "The patch was applied successfully. What should we do next? Run tests to verify?" });
+              conversationHistory.push({ role: "user", content: "Patch emitted to client. Awaiting application confirmation. Suggest a verification command (tests/build) as the next step." });
             }
 
             if (parsed.action === "run_command" && parsed.command) {
               if (agentRunId) await persistStep(db, agentRunId, iteration, "run", `Running: ${parsed.command}`, { command: parsed.command }, {}, "ok", stepDuration);
               sendEvent({ type: "step", step: { id: `step-${Date.now()}-run`, type: "run", label: `Running: ${parsed.command}`, detail: parsed.command as string, status: "completed" }, iteration });
               sendEvent({ type: "run_command", command: parsed.command, summary: parsed.summary });
-              conversationHistory.push({ role: "user", content: `Command \`${parsed.command}\` executed successfully with exit code 0. Continue with next step.` });
+              conversationHistory.push({ role: "user", content: `Command \`${parsed.command}\` suggested to client. Awaiting execution result. Continue planning the next step assuming the command has not yet run.` });
             }
 
             if (parsed.action === "mcp_call" && parsed.mcp_tool) {
