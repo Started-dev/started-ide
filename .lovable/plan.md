@@ -1,97 +1,97 @@
 
-# Fix: Stop Platform From Refreshing State and Opening New Chats
+# Make Skills Actually Work
 
-## Root Cause
+## Problem
 
-The IDE keeps re-initializing because of unstable React dependencies creating cascading re-render loops:
+Skills are broken for two reasons:
 
-1. **Auth token refreshes** fire `onAuthStateChange`, which calls `setUser()` with a new object reference every time -- even when the user ID hasn't changed
-2. **Both persistence hooks** (`useProjectPersistence` and `useConversationPersistence`) depend on the full `user` object, causing them to re-fetch data on every token refresh
-3. **The conversation init effect** includes `convPersistence.conversations` in its dependency array -- this array gets a new reference on every message save, making the effect fire constantly
-4. During re-fetches, `loading` flips `true -> false`, and the combination of timing and new array references can bypass the initialization guard, creating duplicate "New Chat" conversations
+1. **Skill content is silently dropped**: When you activate a skill and send a message, the skill gets packaged as a context chip with type `attachment`. But the `sendMessage` function only processes `selection`, `file`, and `errors` chip types — `attachment` chips are completely ignored and never reach the AI.
 
-Evidence: The database contains 9+ "New Chat" conversations created in rapid succession (every 5-20 minutes), matching auth token refresh intervals.
+2. **Skill content is just a one-liner**: Even if the chip was processed, the content is just a brief description like "Vercel-curated React patterns for performance, hooks, and composition" — not actual system-level instructions that would change AI behavior.
 
-## Fixes
+## Solution
 
-### 1. Stabilize the `user` reference in AuthContext
-
-**File: `src/contexts/AuthContext.tsx`**
-
-- In `onAuthStateChange`, only call `setUser()` if the user ID actually changed (compare `user?.id` to `session?.user?.id`)
-- Same guard for `getSession` -- skip the state update if user is already set with the same ID
-- This prevents all downstream hooks from re-running on token refreshes
-
-### 2. Use `user?.id` instead of `user` object as dependency
-
-**File: `src/hooks/use-conversation-persistence.ts`**
-
-- Change the load effect dependency from `[projectId, user]` to `[projectId, userId]` where `userId = user?.id`
-- Store `user` in a ref for use in callbacks (since we still need it for DB operations), but don't use it as a dependency
-
-**File: `src/hooks/use-project-persistence.ts`**
-
-- Same pattern: depend on `user?.id` instead of `user` to prevent re-fetching on every token refresh
-
-### 3. Remove `convPersistence.conversations` from the init effect dependency
+### 1. Fix chip processing to include attachment types
 
 **File: `src/contexts/IDEContext.tsx`**
 
-- Change the conversation initialization effect dependency from `[projectId, convPersistence.loading, convPersistence.conversations]` to just `[projectId, convPersistence.loading]`
-- The effect only needs to run when `projectId` changes or loading state changes -- not when conversation content updates
-- Read `convPersistence.conversations` inside the effect body instead of depending on it reactively
+Add handling for `attachment` and `url` chip types in the `sendMessage` function so skill content actually reaches the AI context.
 
-### 4. Add a deduplication guard for conversation creation
+### 2. Upgrade skill data with real system prompts
 
-**File: `src/contexts/IDEContext.tsx`**
+**File: `src/data/skills-catalog.ts`**
 
-- Add a `creatingConvRef` flag that prevents the init effect from creating multiple conversations simultaneously
-- Check if a conversation was already created for this project before inserting another
+Add a `systemPrompt` field to the `Skill` interface containing actionable instructions. Each skill will have a substantive prompt (50-200 words) that tells the AI how to behave differently when that skill is active.
+
+Examples:
+- **React Best Practices**: Instructions about preferring composition over inheritance, using custom hooks, memoization patterns, avoiding prop drilling
+- **shadcn/ui**: Instructions to use shadcn/ui components, follow Radix primitives, use `cn()` utility, Tailwind variants
+- **Postgres Best Practices**: Instructions about RLS policies, index design, avoiding N+1 queries
+
+### 3. Inject skills as system-level context, not just chips
+
+**File: `src/components/ide/ChatPanel.tsx`**
+
+Instead of packaging skills as generic attachment chips (which get mixed with user context), inject active skill prompts as a dedicated `skillContext` string passed through to the edge function, where they get prepended to the system prompt.
+
+**File: `src/lib/api-client.ts`**
+
+Add a `skillContext` field to `StreamChatOptions` and pass it to the edge function.
+
+**File: `supabase/functions/started/index.ts`**
+
+Accept `skill_context` from the request body and append it to the system prompt so skills shape AI behavior at the system level (not as user messages that can be ignored).
 
 ## Technical Details
 
-### AuthContext stabilization:
+### Skill interface change:
 ```typescript
-// Before (fires on every token refresh):
-setUser(session?.user ?? null);
-
-// After (only fires when user actually changes):
-setUser(prev => {
-  const newId = session?.user?.id;
-  if (prev?.id === newId) return prev;  // same user, keep stable reference
-  return session?.user ?? null;
-});
+export interface Skill {
+  id: string;
+  name: string;
+  // ...existing fields...
+  systemPrompt: string;  // NEW: actionable instructions for the AI
+}
 ```
 
-### Conversation init effect fix:
+### ChatPanel skill injection:
 ```typescript
-// Before:
-}, [projectId, convPersistence.loading, convPersistence.conversations]);
-
-// After:
-}, [projectId, convPersistence.loading]);
+// Build skill system context
+const skillContext = activeSkills
+  .map(id => SKILLS_CATALOG.find(s => s.id === id))
+  .filter(Boolean)
+  .map(s => `[Skill: ${s!.name}]\n${s!.systemPrompt}`)
+  .join('\n\n');
 ```
 
-### Persistence hook dependency fix:
+### Edge function system prompt augmentation:
 ```typescript
-// Before:
-}, [projectId, user]);
+let fullSystemPrompt = systemPrompt;
+if (skill_context) {
+  fullSystemPrompt += `\n\nACTIVE SKILLS (follow these guidelines):\n${skill_context}`;
+}
+```
 
-// After:
-const userId = user?.id ?? null;
-}, [projectId, userId]);
+### Fix the ignored attachment chips:
+```typescript
+// In sendMessage, add:
+else if (chip.type === 'attachment') {
+  contextParts.push(`[${chip.label}]\n${chip.content}`);
+}
 ```
 
 ## Files to Modify
 
-1. `src/contexts/AuthContext.tsx` -- Stabilize user reference on token refresh
-2. `src/hooks/use-conversation-persistence.ts` -- Use stable `userId` dependency
-3. `src/hooks/use-project-persistence.ts` -- Use stable `userId` dependency
-4. `src/contexts/IDEContext.tsx` -- Remove `conversations` from init effect deps, add creation guard
+1. `src/data/skills-catalog.ts` — Add `systemPrompt` field with real instructions to each skill
+2. `src/components/ide/ChatPanel.tsx` — Build skill context string instead of attachment chips
+3. `src/lib/api-client.ts` — Add `skillContext` to StreamChatOptions
+4. `supabase/functions/started/index.ts` — Accept and inject skill_context into system prompt
+5. `src/contexts/IDEContext.tsx` — Fix attachment chip processing as a fallback
 
 ## Sequencing
 
-1. Fix AuthContext first (biggest impact, stops cascade at the source)
-2. Fix persistence hook dependencies (belt-and-suspenders)
-3. Fix init effect dependency array (prevents unnecessary re-fires)
-4. Add deduplication guard (safety net)
+1. Update Skill interface and add systemPrompts to catalog
+2. Fix the attachment chip bug in IDEContext (safety net)
+3. Add skillContext to api-client
+4. Update ChatPanel to pass skillContext
+5. Update edge function to inject skills into system prompt
