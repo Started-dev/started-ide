@@ -140,54 +140,69 @@ export function generateCandidates(fsmState: string, signals: NBASignals): Actio
   return candidates;
 }
 
-/** Score a single action given signals and policy */
+/** Score a single action given signals and policy, returning score and reason */
 export function scoreAction(
   action: ActionKey,
   signals: NBASignals,
   policy: NBAPolicy
-): number {
+): { score: number; reason: string } {
   let score = 0;
   const w = policy.weights;
+  const reasons: string[] = [];
 
   // Urgency
   if (signals.lastRunFailed && ["explain_error", "fix_or_plan"].includes(action)) {
-    score += w.urgency.last_run_failed || 0;
+    const v = w.urgency.last_run_failed || 0;
+    score += v;
+    if (v) reasons.push(`Last run failed (+${v})`);
   }
   if (signals.agentBlocked && ["explain_error", "fix_or_plan"].includes(action)) {
-    score += w.urgency.agent_blocked || 0;
+    const v = w.urgency.agent_blocked || 0;
+    score += v;
+    if (v) reasons.push(`Agent blocked (+${v})`);
   }
   if (signals.diffDirty && !signals.lastRunOk && ["run_tests", "run_build"].includes(action)) {
-    score += w.urgency.diff_dirty_unverified || 0;
+    const v = w.urgency.diff_dirty_unverified || 0;
+    score += v;
+    if (v) reasons.push(`Unverified diff (+${v})`);
   }
   if (signals.hasPatch && ["preview_diff", "apply_patch"].includes(action)) {
-    score += w.urgency.patch_ready_unapplied || 0;
+    const v = w.urgency.patch_ready_unapplied || 0;
+    score += v;
+    if (v) reasons.push(`Patch ready (+${v})`);
   }
   if (signals.timeSinceLastProgressSec > 60) {
-    score += w.urgency.time_since_progress_60s || 0;
+    const v = w.urgency.time_since_progress_60s || 0;
+    score += v;
+    if (v) reasons.push(`Stale >60s (+${v})`);
   }
 
   // Verification bonus
-  if (action === "run_tests") score += w.verification_bonus.run_tests || 0;
-  if (action === "run_build") score += w.verification_bonus.run_build || 0;
-  if (action === "generate_attestation") score += w.verification_bonus.generate_attestation || 0;
-  if (action === "replay_attestation") score += w.verification_bonus.replay_attestation || 0;
+  if (action === "run_tests") { const v = w.verification_bonus.run_tests || 0; score += v; if (v) reasons.push(`Verification (+${v})`); }
+  if (action === "run_build") { const v = w.verification_bonus.run_build || 0; score += v; if (v) reasons.push(`Build check (+${v})`); }
+  if (action === "generate_attestation") { const v = w.verification_bonus.generate_attestation || 0; score += v; if (v) reasons.push(`Attestation (+${v})`); }
+  if (action === "replay_attestation") { const v = w.verification_bonus.replay_attestation || 0; score += v; if (v) reasons.push(`Replay (+${v})`); }
 
   // Momentum bonus
-  if (action === "preview_diff" && signals.hasPatch) score += w.momentum_bonus.preview_diff_when_patch_ready || 0;
-  if (action === "apply_patch") score += w.momentum_bonus.apply_patch_after_preview || 0;
-  if (action === "apply_and_run" || (action === "run_tests" && signals.hasPatch)) score += w.momentum_bonus.run_after_apply || 0;
-  if (action === "continue_agent" && signals.agentRunning) score += w.momentum_bonus.continue_agent || 0;
+  if (action === "preview_diff" && signals.hasPatch) { const v = w.momentum_bonus.preview_diff_when_patch_ready || 0; score += v; if (v) reasons.push(`Preview momentum (+${v})`); }
+  if (action === "apply_patch") { const v = w.momentum_bonus.apply_patch_after_preview || 0; score += v; if (v) reasons.push(`Apply momentum (+${v})`); }
+  if (action === "apply_and_run" || (action === "run_tests" && signals.hasPatch)) { const v = w.momentum_bonus.run_after_apply || 0; score += v; if (v) reasons.push(`Run after apply (+${v})`); }
+  if (action === "continue_agent" && signals.agentRunning) { const v = w.momentum_bonus.continue_agent || 0; score += v; if (v) reasons.push(`Continue agent (+${v})`); }
 
   // Safety penalty
-  if (signals.riskLevel === "simulate") score -= w.safety_penalty.risk_simulate || 0;
-  if (signals.riskLevel === "write") score -= w.safety_penalty.risk_write || 0;
-  if (signals.needsApproval) score -= w.safety_penalty.requires_approval_ungranted || 0;
+  if (signals.riskLevel === "simulate") { const v = w.safety_penalty.risk_simulate || 0; score -= v; if (v) reasons.push(`Simulate risk (-${v})`); }
+  if (signals.riskLevel === "write") { const v = w.safety_penalty.risk_write || 0; score -= v; if (v) reasons.push(`Write risk (-${v})`); }
+  if (signals.needsApproval) { const v = w.safety_penalty.requires_approval_ungranted || 0; score -= v; if (v) reasons.push(`Needs approval (-${v})`); }
 
   // Friction penalty
   const ignoredCount = signals.userIgnoredCount[action] || 0;
-  score -= ignoredCount * (w.friction_penalty.ignored_multiplier || 0);
+  if (ignoredCount > 0) {
+    const v = ignoredCount * (w.friction_penalty.ignored_multiplier || 0);
+    score -= v;
+    reasons.push(`Ignored ${ignoredCount}x (-${v})`);
+  }
 
-  return score;
+  return { score, reason: reasons.join("; ") || "Base action" };
 }
 
 /** Compute confidence level from normalized score */
@@ -225,8 +240,8 @@ export function selectActions(
 
   // Score all
   const scored = filtered.map(key => {
-    const s = scoreAction(key, signals, policy);
-    return { key, score: s };
+    const result = scoreAction(key, signals, policy);
+    return { key, score: result.score, reason: result.reason };
   }).sort((a, b) => b.score - a.score);
 
   if (scored.length === 0) return { primary: null, secondary: [] };
@@ -234,11 +249,11 @@ export function selectActions(
   const maxScore = Math.max(...scored.map(s => s.score), 1);
   const thresholds = policy.confidence_thresholds;
 
-  const toScoredAction = (item: { key: ActionKey; score: number }): ScoredAction => ({
+  const toScoredAction = (item: { key: ActionKey; score: number; reason: string }): ScoredAction => ({
     key: item.key,
     score: item.score,
     confidence: computeConfidence(item.score, maxScore, thresholds),
-    reason: "",
+    reason: item.reason,
     label: actionLabel(item.key),
   });
 

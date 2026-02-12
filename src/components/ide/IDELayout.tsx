@@ -5,6 +5,7 @@ import {
   Play, MessageSquare, Terminal, Command, Sun, Moon, Brain,
   LogOut, Clock, FolderOpen, ChevronDown, Users, User,
   Rocket, Activity, Globe2, Plug, GitBranch, Eye, EyeOff,
+  Sparkles,
 } from 'lucide-react';
 import startedWordmark from '@/assets/started-wordmark.svg';
 import startedWordmarkLight from '@/assets/started-wordmark-light.svg';
@@ -25,6 +26,7 @@ import { OpenClawPanel } from './OpenClawPanel';
 import { EventTimeline } from './EventTimeline';
 import { ProtocolZone } from './ProtocolZone';
 import { IntegrationsPanel } from './IntegrationsPanel';
+import { SkillsBrowser } from './SkillsBrowser';
 import { NavIconButton } from './NavIconButton';
 import { useIDE } from '@/contexts/IDEContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +63,8 @@ export function IDELayout() {
   const [showIntegrations, setShowIntegrations] = useState(false);
   const [showCICD, setShowCICD] = useState(false);
   const [showOpenClaw, setShowOpenClaw] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [activeSkills, setActiveSkills] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [userPlanKey, setUserPlanKey] = useState<string>('free');
   const terminalPanelRef = useRef<ImperativePanelHandle>(null);
@@ -247,6 +251,12 @@ export function IDELayout() {
                 tooltip="Collaboration"
                 onClick={handleCollabClick}
               />
+              <NavIconButton
+                icon={<Sparkles className="h-3.5 w-3.5" />}
+                tooltip="Skills"
+                onClick={() => setShowSkills(true)}
+                status={activeSkills.length > 0 ? { color: 'green' } : undefined}
+              />
 
               <div className="w-px h-5 bg-border mx-1" />
 
@@ -425,6 +435,13 @@ export function IDELayout() {
           webhookBaseUrl={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/project-webhooks`}
           projectId={project.id}
           onOpenTxBuilder={() => setShowTxBuilder(true)}
+        />
+      )}
+      {showSkills && (
+        <SkillsBrowser
+          onClose={() => setShowSkills(false)}
+          activeSkills={activeSkills}
+          onToggleSkill={(id) => setActiveSkills(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])}
         />
       )}
     </div>
