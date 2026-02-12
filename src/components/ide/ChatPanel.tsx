@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, AtSign, FileCode, AlertCircle, Brain, X, Globe, Image, Link, Paperclip } from 'lucide-react';
+import { Send, AtSign, FileCode, AlertCircle, Brain, X, Globe, Image, Link, Paperclip, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { ContextStrip } from './chat/ContextStrip';
 import { SuggestionCards } from './chat/SuggestionCards';
 import { HesitationPrompt } from './chat/HesitationPrompt';
 import { useHesitationDetection } from '@/hooks/use-hesitation-detection';
+import { SKILLS_CATALOG } from '@/data/skills-catalog';
 
 export function ChatPanel() {
   const {
@@ -28,6 +29,7 @@ export function ChatPanel() {
     startAgent, setActiveRightPanel, agentRun, runCommand,
     conversations, activeConversationId, switchConversation, newConversation, deleteConversation,
     selectedModel, setSelectedModel,
+    activeSkills,
   } = useIDE();
   const [input, setInput] = useState('');
   const [chips, setChips] = useState<ContextChip[]>([]);
@@ -143,11 +145,24 @@ export function ChatPanel() {
     const msg = content || input;
     if (!msg.trim() && chips.length === 0) return;
     hesitation.recordActivity();
+
+    // Build skill context chips from active skills
+    const skillChips: ContextChip[] = activeSkills
+      .map(id => SKILLS_CATALOG.find(s => s.id === id))
+      .filter(Boolean)
+      .map(skill => ({
+        type: 'attachment' as const,
+        label: `Skill: ${skill!.name}`,
+        content: `[Agent Skill: ${skill!.name}]\nSource: ${skill!.source}\nCategory: ${skill!.category}\n\n${skill!.description}\n\nReference: ${skill!.url}`,
+      }));
+
+    const allChips = [...chips, ...skillChips];
+
     if (agentMode) {
       startAgent(msg.trim());
       setActiveRightPanel('agent');
     } else {
-      sendMessage(msg, chips.length > 0 ? chips : undefined);
+      sendMessage(msg, allChips.length > 0 ? allChips : undefined);
     }
     setInput('');
     setChips([]);
@@ -297,6 +312,16 @@ export function ChatPanel() {
 
       {/* Context strip */}
       <ContextStrip />
+
+      {/* Active skills indicator */}
+      {activeSkills.length > 0 && (
+        <div className="px-3 pb-1">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] rounded-full border border-primary/20">
+            <Sparkles className="h-2.5 w-2.5" />
+            {activeSkills.length} skill{activeSkills.length !== 1 ? 's' : ''} active
+          </span>
+        </div>
+      )}
 
       {/* Context chips */}
       {chips.length > 0 && (

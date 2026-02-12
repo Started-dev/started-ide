@@ -305,6 +305,8 @@ interface IDEContextType {
   selectedModel: ModelId;
   setSelectedModel: (model: ModelId) => void;
   runnerStatus: RunnerStatus;
+  activeSkills: string[];
+  setActiveSkills: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 const IDEContext = createContext<IDEContextType | null>(null);
@@ -344,6 +346,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   const [pendingPermission, setPendingPermission] = useState<(PermissionRequest & { runId: string }) | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelId>('started/started-ai');
   const [runnerStatus, setRunnerStatus] = useState<RunnerStatus>('disconnected');
+  const [activeSkills, setActiveSkills] = useState<string[]>([]);
 
   // Agent state
   const [agentRun, setAgentRun] = useState<AgentRun | null>(null);
@@ -1562,6 +1565,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       alwaysAllowPermission,
       selectedModel, setSelectedModel,
       runnerStatus,
+      activeSkills, setActiveSkills,
     }}>
       {children}
     </IDEContext.Provider>

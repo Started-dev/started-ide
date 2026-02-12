@@ -49,7 +49,7 @@ export function SkillsBrowser({ onClose, activeSkills, onToggleSkill }: SkillsBr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[85vh] bg-card border border-border rounded-lg shadow-xl flex flex-col">
+      <div className="w-full max-w-2xl max-h-[85vh] bg-card border border-border rounded-lg shadow-xl flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
