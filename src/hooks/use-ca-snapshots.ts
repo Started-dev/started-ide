@@ -40,7 +40,23 @@ export function useCASnapshots(projectId: string | null) {
   const checkoutMain = useCallback(async (): Promise<IDEFile[] | null> => {
     if (!projectId) return null;
     try {
-      const result = await callSnapshotAPI('checkout', { project_id: projectId, ref_name: 'main' });
+      const token = await getAuthToken();
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/snapshot-api`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'checkout', project_id: projectId, ref_name: 'main' }),
+      });
+      // 404 means no snapshot exists yet — this is expected for new projects
+      if (resp.status === 404) return null;
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Unknown error' }));
+        console.warn('CA checkout error:', err.error);
+        return null;
+      }
+      const result = await resp.json();
       if (!result.ok || !result.files || result.files.length === 0) return null;
       return buildIDEFilesFromRows(result.files);
     } catch (err) {
