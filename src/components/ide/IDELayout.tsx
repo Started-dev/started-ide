@@ -49,6 +49,7 @@ export function IDELayout() {
     projects, switchProject, createProject, renameProject, deleteProject,
     collaborators, collabMessages, fileLocks, presenceUsers,
     isProjectOwner, inviteCollaborator, removeCollaborator, sendCollabMessage,
+    activeSkills, setActiveSkills,
   } = useIDE();
   const { signOut, user } = useAuth();
 
@@ -64,7 +65,6 @@ export function IDELayout() {
   const [showCICD, setShowCICD] = useState(false);
   const [showOpenClaw, setShowOpenClaw] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
-  const [activeSkills, setActiveSkills] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [userPlanKey, setUserPlanKey] = useState<string>('free');
   const terminalPanelRef = useRef<ImperativePanelHandle>(null);
