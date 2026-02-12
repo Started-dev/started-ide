@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, AtSign, FileCode, AlertCircle, Brain, X, Globe, Image, Link } from 'lucide-react';
+import { Send, AtSign, FileCode, AlertCircle, Brain, X, Globe, Image, Link, Paperclip } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ export function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const [chipDialog, setChipDialog] = useState<{ type: 'url' | 'web'; value: string } | null>(null);
 
   // Determine pulse state
@@ -77,6 +78,8 @@ export function ChatPanel() {
       setChipDialog({ type: 'web', value: '' });
     } else if (type === 'image') {
       imageInputRef.current?.click();
+    } else if (type === 'attachment') {
+      attachInputRef.current?.click();
     }
   };
 
@@ -99,6 +102,38 @@ export function ChatPanel() {
       setChips(prev => [...prev, { type: 'image', label: file.name.slice(0, 20), content: base64 }]);
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  }, []);
+
+  const handleAttachmentUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const TEXT_EXTENSIONS = new Set([
+      'txt','md','markdown','json','js','jsx','ts','tsx','py','rb','go',
+      'rs','java','c','cpp','h','hpp','cs','swift','kt','scala','sh',
+      'bash','zsh','fish','ps1','bat','cmd','html','htm','css','scss',
+      'sass','less','xml','svg','yaml','yml','toml','ini','cfg','conf',
+      'env','log','sql','graphql','gql','proto','csv','tsv','rst',
+      'tex','r','lua','php','pl','pm','ex','exs','erl','hs','ml',
+      'vim','dockerfile','makefile','gitignore',
+    ]);
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    const isText = TEXT_EXTENSIONS.has(ext) || file.type.startsWith('text/');
+
+    if (isText) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        let text = reader.result as string;
+        if (text.length > 50_000) {
+          text = text.slice(0, 50_000) + '\n\n[...truncated at 50 000 chars]';
+        }
+        setChips(prev => [...prev, { type: 'attachment', label: file.name.slice(0, 24), content: text }]);
+      };
+      reader.readAsText(file);
+    } else {
+      const sizeKB = Math.round(file.size / 1024);
+      setChips(prev => [...prev, { type: 'attachment', label: file.name.slice(0, 24), content: `[Binary file: ${file.name} (${sizeKB} KB)]` }]);
+    }
     e.target.value = '';
   }, []);
 
@@ -131,6 +166,7 @@ export function ChatPanel() {
       case 'url': return <Link className="h-3 w-3" />;
       case 'web': return <Globe className="h-3 w-3" />;
       case 'image': return <Image className="h-3 w-3" />;
+      case 'attachment': return <Paperclip className="h-3 w-3" />;
       default: return null;
     }
   };
@@ -275,8 +311,9 @@ export function ChatPanel() {
         </div>
       )}
 
-      {/* Hidden image input */}
+      {/* Hidden file inputs */}
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+      <input ref={attachInputRef} type="file" className="hidden" onChange={handleAttachmentUpload} />
 
       {/* Input */}
       <div className="border-t border-border p-3 space-y-2">
@@ -287,6 +324,7 @@ export function ChatPanel() {
           <button onClick={() => addChip('url')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@url</button>
           <button onClick={() => addChip('web')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@web</button>
           <button onClick={() => addChip('image')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@image</button>
+          <button onClick={() => addChip('attachment')} className="text-[10px] px-2 py-1 rounded-sm transition-colors duration-150 bg-primary/10 text-primary hover:bg-primary/20">@attach</button>
           <div className="flex-1" />
           <ModelSelector value={selectedModel} onChange={setSelectedModel} />
           <button

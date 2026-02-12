@@ -55,7 +55,7 @@ export interface ChatMessage {
 }
 
 export interface ContextChip {
-  type: 'selection' | 'file' | 'errors' | 'url' | 'web' | 'image';
+  type: 'selection' | 'file' | 'errors' | 'url' | 'web' | 'image' | 'attachment';
   label: string;
   content: string;
 }
