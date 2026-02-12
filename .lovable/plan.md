@@ -1,99 +1,106 @@
 
-# Cursor-Style Agent Output UI + Functional Skills
+# Agent Panel UI Redesign — Cursor-Style Clean Timeline
 
-This plan focuses on two areas: redesigning the assistant message rendering to match Cursor's polished agent output, and making the Skills system functional with real indicators.
+## Problem
 
----
+The current `AgentTimeline` component has a busy vertical-dot timeline with many small badges (Web3, duration, file changes) that creates visual noise. Compared to Cursor's agent panel (reference images), it looks cluttered and unfocused. The core layout problems:
 
-## Part 1: Cursor-Style Assistant Message Redesign
+- **Vertical dot timeline** with colored circles adds visual weight without adding clarity
+- **All steps are expanded** — no collapsibility for iteration groups
+- **Thinking content is truncated** to 300 chars with no expand option
+- **File changes use inline badges** instead of clean file-path indicators
+- **No clear iteration grouping** — steps blend together
+- **Status badges use colored backgrounds** that compete for attention
 
-The current `AssistantMessage` parses raw markdown into basic blocks (plan, diff, command, text). Cursor's UI shows distinct visual elements: collapsible "Thought Xs" with timing, inline muted tool actions ("Grepped...", "Listed...", "Reading..."), and interactive Question cards with A/B/C/D options.
+## Solution: Redesign to Match Cursor's Agent Panel
 
-### New Components to Create
+### Design Principles (from reference screenshots)
+1. **Group by iteration** — each iteration is a collapsible section with header "Iteration N: Analyzing..."
+2. **Thinking sections** — show "Thinking:" label in accent color, with expandable multi-line content
+3. **Running sections** — show "Running:" with command text in green, expandable output
+4. **Clean header** — "AGENT" label + status badge (completed/running) + "New Run" button, right-aligned
+5. **Goal summary** at bottom when done
+6. **Minimal chrome** — no dot timeline, no colored circles, just clean indented sections
 
-**ThoughtBlock.tsx** -- Collapsible thinking section
-- Amber/orange "Thought" label with elapsed time (e.g., "Thought 9s")
-- Collapsed by default, click to expand full reasoning
-- Uses the `#F5A623` accent color for the label
-- Content rendered as muted monospace text inside
+### Component Changes
 
-**ToolActionBlock.tsx** -- Inline tool action indicators
-- Compact single-line indicators: "Grepped codebase", "Listed src/", "Reading README.md"
-- Muted green/gray text, no borders or backgrounds
-- Stacked vertically with tight spacing (like Cursor shows)
-- Detects patterns: `Grepped ...`, `Listed ...`, `Reading ...`, `Edited ...`, `Created ...`
+**File: `src/components/ide/AgentTimeline.tsx`** — Full redesign
 
-**PlanBlock.tsx** -- Clean numbered plan with visual steps
-- Numbered steps with small circles or bullet markers
-- Clean sans-serif text (not raw monospace)
-- Optional checkmarks for completed steps
-- Left border accent in orange
+Current structure (dot timeline with per-step rendering) replaced with:
 
-**QuestionCard.tsx** -- Structured question card with selectable options
-- Bordered card with question icon header
-- Labeled options (A, B, C, D) with descriptions
-- "Other..." free-text option
-- "Skip" and "Continue" buttons at the bottom
-- When user selects an option and clicks Continue, it sends that choice as a message
+```text
++--------------------------------------------------+
+| AGENT   [completed]              [+ New Run]     |
++--------------------------------------------------+
+| Goal text here...                                |
+| < Iteration 3/10  @ 39.8s  18 steps             |
++--------------------------------------------------+
+|                                                  |
+| > Iteration 3: Analyzing...                     |
+|   Thinking: Creating a directory indexer...      |
+|     (expandable full text)                       |
+|   Running: cat << 'EOF' > scripts/generate...   |
+|     (expandable command + output)                |
+|                                                  |
+| > Iteration 4: Analyzing...                     |
+|   Thinking: Executing the full pipeline...       |
+|   Running: node scripts/generate-bulk-temp...    |
+|                                                  |
+| > Iteration 5: Analyzing...                     |
+|   ...                                           |
+|                                                  |
+| v Goal completed                                 |
+|   I have created the directory structure...      |
++--------------------------------------------------+
+```
 
-### Changes to AssistantMessage.tsx
+Key implementation details:
+- Group `agentRun.steps` by iteration number (parse from step labels or track via metadata)
+- Each iteration group is a collapsible `<details>`-style element
+- "Thinking:" sections use the primary/orange accent color for the label, muted text for content
+- "Running:" sections use green for the label, monospace for commands
+- "Patch" steps show compact file path list (just filenames, not badges)
+- "Goal completed" gets a distinct bottom section with the summary text
+- Remove the vertical dot timeline entirely
+- Remove Web3 op-type badges (niche, adds noise)
+- Duration shown only at iteration level, not per-step
 
-Overhaul the `parseBlocks` function to detect new block types:
-- `thought` -- detected by "Thought Xs" pattern or `<thought>` tags
-- `tool_action` -- detected by "Grepped", "Listed", "Reading", "Edited" at line start
-- `question` -- detected by numbered options with A/B/C/D labels
-- Existing `plan`, `diff`, `command`, `code`, `text` types remain
+**File: `src/types/agent.ts`** — Minor addition
 
-Improve rendering:
-- Remove the divider lines between blocks (cleaner look)
-- Add the orange left-border accent on the current/latest assistant message
-- Tighter spacing between tool action lines
-- Better typography hierarchy (sans-serif for prose, mono only for code)
+Add an optional `iteration` field to `AgentStep` so steps can be properly grouped:
+```typescript
+export interface AgentStep {
+  // ...existing fields
+  iteration?: number;  // which iteration this step belongs to
+}
+```
 
-### Changes to AnimatedDiffBlock.tsx
+**File: `src/contexts/IDEContext.tsx`** — Pass iteration to steps
 
-- Add a filename tab at the top (extract from `--- a/path` or `+++ b/path` lines)
-- Show `+N -M` line count badge next to filename
-- Add a copy button in the top-right corner
-- Keep the existing line-by-line animation
+In the `onStep` callback (line ~1239), attach the `iteration` number to each step:
+```typescript
+addStep({
+  ...existing fields,
+  iteration,  // add this
+});
+```
 
----
+### What stays the same
+- The `startAgent`/`stopAgent`/`pauseAgent` logic is untouched
+- The edge function `agent-run/index.ts` is untouched — it already works correctly
+- The `ChatPanel.tsx` agent mode toggle is untouched
+- All agent reconnection logic stays
 
-## Part 2: Functional Skills System
-
-### Changes to SkillsBrowser.tsx
-
-- Remove fake source labels ("ClawHub", "SkillsMP", "Awesome") -- replace with "Built-in" for all current skills
-- Add a "Test Skill" button: sends a small test prompt with the skill active and shows the AI's response inline in a toast or expandable section
-- Add a "Preview Prompt" toggle to see the raw `systemPrompt` that gets injected
-
-### Active Skills Indicator in Chat
-
-- In `ChatHeader.tsx`, add a small skills indicator showing count of active skills (e.g., sparkle icon + "3 skills")
-- Clicking it opens the SkillsBrowser
-
-### Changes to skills-catalog.ts
-
-- Change all `source` values to a new `'built-in'` source type
-- Update `sourceLabels` map accordingly
-- Keep all existing `systemPrompt` values (they are real and functional)
-
----
-
-## Files to Create
-- `src/components/ide/chat/ThoughtBlock.tsx`
-- `src/components/ide/chat/ToolActionBlock.tsx`
-- `src/components/ide/chat/PlanBlock.tsx`
-- `src/components/ide/chat/QuestionCard.tsx`
+### What gets removed
+- Dot timeline (vertical line + colored circles)
+- Web3 op-type badges (`Web3OpBadge`, `isWeb3MCP`)
+- Per-step duration display (moved to iteration level)
+- The `stepIcon` and `statusColors` mappings (no longer needed)
 
 ## Files to Modify
-- `src/components/ide/chat/AssistantMessage.tsx` -- new block types and rendering
-- `src/components/ide/chat/AnimatedDiffBlock.tsx` -- filename header, copy button
-- `src/components/ide/chat/ChatHeader.tsx` -- active skills indicator
-- `src/components/ide/SkillsBrowser.tsx` -- remove fake labels, add test button
-- `src/data/skills-catalog.ts` -- source cleanup
-- `src/types/ide.ts` -- add `thought` and `tool_action` block-related types if needed
+- `src/components/ide/AgentTimeline.tsx` — full redesign
+- `src/types/agent.ts` — add `iteration` field to `AgentStep`
+- `src/contexts/IDEContext.tsx` — pass iteration number to step objects
 
-## No Database Changes Required
-
-All changes are purely frontend UI. Skills already work via `systemPrompt` injection into the chat context -- this plan makes that visible and testable.
+## No Backend Changes
+The agent edge function already streams properly structured events. This is purely a frontend UI cleanup.
