@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'; // stabilized
 import { IDEFile, OpenTab, ChatMessage, RunResult, Project, ContextChip, Conversation } from '@/types/ide';
 import { ToolCall, ToolName, PatchPreview, ParsedPatch, PermissionPolicy, DEFAULT_PERMISSION_POLICY } from '@/types/tools';
 import { supabase } from '@/integrations/supabase/client';
