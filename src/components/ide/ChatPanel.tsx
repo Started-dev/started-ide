@@ -315,8 +315,7 @@ export function ChatPanel() {
         />
       )}
 
-      {/* Suggestion cards */}
-      <SuggestionCards inputLength={input.length} onSendMessage={(msg) => handleSend(msg)} />
+      {/* Suggestion cards — inside the input border area */}
 
       {/* Hidden file inputs */}
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -324,6 +323,8 @@ export function ChatPanel() {
 
       {/* Input area */}
       <div className="border-t border-border px-3 pt-2 pb-2 space-y-1.5">
+        {/* Suggestion cards inside input area */}
+        <SuggestionCards inputLength={input.length} onSendMessage={(msg) => handleSend(msg)} />
         {/* Attached context chips + active skills — only when present */}
         {(chips.length > 0 || activeSkills.length > 0) && (
           <div className="flex flex-wrap gap-1">
@@ -335,7 +336,7 @@ export function ChatPanel() {
               </span>
             ))}
             {activeSkills.length > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-[10px] rounded-full border border-primary/20">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/15 text-primary text-[10px] rounded-full">
                 <Sparkles className="h-2.5 w-2.5" />
                 {activeSkills.length} skill{activeSkills.length !== 1 ? 's' : ''}
               </span>
@@ -454,17 +455,17 @@ export function ChatPanel() {
 function UserMessage({ msg, chipIcon }: { msg: import('@/types/ide').ChatMessage; chipIcon: (type: string) => React.ReactNode }) {
   return (
     <div className="animate-fade-in flex justify-end">
-      {msg.contextChips && msg.contextChips.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-1">
-          {msg.contextChips.map((chip, i) => (
-            <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] rounded-sm">
-              {chipIcon(chip.type)}
-              {chip.label}
-            </span>
-          ))}
-        </div>
-      )}
       <div className="bg-primary/10 text-foreground rounded-lg px-3 py-2 max-w-[85%]">
+        {msg.contextChips && msg.contextChips.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-1.5">
+            {msg.contextChips.map((chip, i) => (
+              <span key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary/15 text-primary text-[10px] rounded-sm">
+                {chipIcon(chip.type)}
+                {chip.label}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="whitespace-pre-wrap font-mono text-xs">
           {msg.content}
         </div>

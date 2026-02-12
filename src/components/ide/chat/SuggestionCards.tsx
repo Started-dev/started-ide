@@ -40,19 +40,19 @@ export function SuggestionCards({ inputLength, onSendMessage }: SuggestionCardsP
     const candidates = generateCandidates(fsmState, signals);
     const { primary, secondary } = selectActions(candidates, signals, defaultPolicy as NBAPolicy);
 
-    const actions = [primary, ...secondary].filter(Boolean).slice(0, 3);
+    const actions = [primary, ...secondary].filter(Boolean).slice(0, 2);
     return actions.map(a => ({ label: a!.label, key: a!.key }));
   }, [inputLength, runs, pendingPatches, agentRun]);
 
   if (suggestions.length === 0) return null;
 
   return (
-    <div className="flex gap-1.5 px-3 py-1.5 animate-fade-in">
+    <div className="flex gap-1.5 px-3 py-1 animate-fade-in">
       {suggestions.map(s => (
         <button
           key={s.key}
           onClick={() => onSendMessage(s.label)}
-          className="px-3 py-1.5 text-[11px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 hover:bg-muted/50 hover:text-foreground hover:border-border/60 transition-all duration-150"
+          className="px-2.5 py-1 text-[11px] text-muted-foreground rounded-md hover:bg-accent hover:text-foreground transition-all duration-150"
         >
           {s.label}
         </button>
