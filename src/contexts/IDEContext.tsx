@@ -401,11 +401,15 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
   // Track whether AI title generation has been triggered for the active conversation
   const titleGeneratedRef = useRef<Set<string>>(new Set());
 
+  // Deduplication guard for conversation creation
+  const creatingConvRef = useRef(false);
+
   // Initialize conversations when project loads
   useEffect(() => {
     if (!projectId || convPersistence.loading) return;
     if (convInitializedRef.current === projectId) return;
 
+    // Read conversations snapshot inside effect body (not as dependency)
     const projectConvs = convPersistence.conversations.filter(c => c.projectId === projectId);
     if (projectConvs.length > 0) {
       convInitializedRef.current = projectId;
@@ -413,18 +417,21 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       setActiveConversationId(latest.id);
       setChatMessages(latest.messages);
       setLocalConversations([]);
-    } else {
+    } else if (!creatingConvRef.current) {
+      creatingConvRef.current = true;
       convInitializedRef.current = projectId;
       const newConv = makeNewConversation(projectId);
       setActiveConversationId(newConv.id);
       setChatMessages(newConv.messages);
       setLocalConversations([newConv]);
-      convPersistence.createConversation(newConv);
+      convPersistence.createConversation(newConv).finally(() => {
+        creatingConvRef.current = false;
+      });
     }
     // Don't clear agentRun on project load — agent runs independently
     setActiveRightPanel(agentRun?.status === 'running' ? 'agent' : 'chat');
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, convPersistence.loading, convPersistence.conversations]);
+  }, [projectId, convPersistence.loading]);
 
   // Sync chatMessages to DB (debounced)
   const prevMessagesRef = useRef(chatMessages);

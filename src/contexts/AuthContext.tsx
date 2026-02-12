@@ -58,7 +58,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      // Only update user if the identity actually changed (prevents cascading re-renders on token refresh)
+      setUser(prev => {
+        const newId = session?.user?.id ?? null;
+        if (prev?.id === newId) return prev;
+        return session?.user ?? null;
+      });
       setLoading(false);
       if (session?.user) {
         // Defer profile fetch to avoid Supabase client deadlock
@@ -70,7 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(prev => {
+        const newId = session?.user?.id ?? null;
+        if (prev?.id === newId) return prev;
+        return session?.user ?? null;
+      });
       setLoading(false);
       if (session?.user) fetchProfile(session.user.id);
     });

@@ -33,9 +33,13 @@ export function useProjectPersistence(user: User | null) {
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const projectIdRef = useRef<string | null>(null);
 
+  const userRef = useRef(user);
+  userRef.current = user;
+  const userId = user?.id ?? null;
+
   // Load projects list + most recent project files on login
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setState({ projectId: null, loading: false, initialFiles: null, projects: [] });
       return;
     }
@@ -48,7 +52,7 @@ export function useProjectPersistence(user: User | null) {
         const { data: allProjects, error: projErr } = await supabase
           .from('projects')
           .select('id, name, created_at')
-          .eq('owner_id', user!.id)
+          .eq('owner_id', userId!)
           .order('created_at', { ascending: false });
 
         if (projErr) throw projErr;
@@ -66,7 +70,7 @@ export function useProjectPersistence(user: User | null) {
         } else {
           const { data: newProj, error: createErr } = await supabase
             .from('projects')
-            .insert({ owner_id: user!.id, name: 'demo-project' })
+            .insert({ owner_id: userId!, name: 'demo-project' })
             .select('id, name, created_at')
             .single();
           if (createErr || !newProj) throw createErr || new Error('Failed to create project');
@@ -101,7 +105,7 @@ export function useProjectPersistence(user: User | null) {
 
     init();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [userId]);
 
   // Switch to a different project
   const switchProject = useCallback(async (targetProjectId: string) => {
@@ -131,13 +135,13 @@ export function useProjectPersistence(user: User | null) {
 
   // Create a new project (enforces max_projects quota)
   const createProject = useCallback(async (name: string): Promise<{ id: string } | { error: string }> => {
-    if (!user) return { error: 'You must be signed in to create a project' };
+    if (!userRef.current) return { error: 'You must be signed in to create a project' };
     try {
       // Check plan quota
       const { data: ledger } = await supabase
         .from('api_usage_ledger')
         .select('plan_key')
-        .eq('owner_id', user.id)
+        .eq('owner_id', userRef.current.id)
         .order('period_start', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -157,7 +161,7 @@ export function useProjectPersistence(user: User | null) {
 
       const { data: newProj, error } = await supabase
         .from('projects')
-        .insert({ owner_id: user.id, name })
+        .insert({ owner_id: userRef.current.id, name })
         .select('id, name, created_at')
         .single();
 
@@ -170,7 +174,7 @@ export function useProjectPersistence(user: User | null) {
       console.error('Failed to create project:', err);
       return { error: err instanceof Error ? err.message : 'Unknown error creating project' };
     }
-  }, [user, state.projects.length]);
+  }, [state.projects.length]);
 
   // Rename a project
   const renameProject = useCallback(async (projectIdToRename: string, newName: string) => {

@@ -48,6 +48,9 @@ export function useConversationPersistence(projectId: string | null, user: User 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const userRef = useRef(user);
+  userRef.current = user;
+  const userId = user?.id ?? null;
 
   // Flush pending saves on browser close
   useEffect(() => {
@@ -76,7 +79,7 @@ export function useConversationPersistence(projectId: string | null, user: User 
 
   // Load conversations for the current project
   useEffect(() => {
-    if (!projectId || !user) {
+    if (!projectId || !userId) {
       setConversations([]);
       setLoading(false);
       return;
@@ -90,7 +93,7 @@ export function useConversationPersistence(projectId: string | null, user: User 
           .from('conversations')
           .select('*')
           .eq('project_id', projectId)
-          .eq('user_id', user!.id)
+          .eq('user_id', userId!)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -108,18 +111,18 @@ export function useConversationPersistence(projectId: string | null, user: User 
     setLoading(true);
     load();
     return () => { cancelled = true; };
-  }, [projectId, user]);
+  }, [projectId, userId]);
 
   // Create a new conversation in the DB
   const createConversation = useCallback(async (conv: Conversation): Promise<string | null> => {
-    if (!projectId || !user) return null;
+    if (!projectId || !userRef.current) return null;
       try {
         const { data, error } = await supabase
           .from('conversations')
           .insert({
             id: conv.id,
             project_id: projectId,
-            user_id: user.id,
+            user_id: userRef.current!.id,
             title: conv.title,
             messages: messagesToJson(conv.messages) as any,
           })
@@ -136,11 +139,11 @@ export function useConversationPersistence(projectId: string | null, user: User 
         console.error('Failed to create conversation:', err);
         return null;
       }
-  }, [projectId, user]);
+  }, [projectId]);
 
   // Save conversation messages (debounced)
   const saveConversation = useCallback((convId: string, messages: ChatMessage[], title: string) => {
-    if (!projectId || !user) return;
+    if (!projectId || !userRef.current) return;
 
     // Update local state immediately
     setConversations(prev => prev.map(c =>
@@ -166,7 +169,7 @@ export function useConversationPersistence(projectId: string | null, user: User 
         console.error('Failed to save conversation:', err);
       }
     }, SAVE_DEBOUNCE_MS);
-  }, [projectId, user]);
+  }, [projectId]);
 
   // Delete a conversation from the DB
   const deleteConversationFromDB = useCallback(async (convId: string) => {
