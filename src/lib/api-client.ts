@@ -1,12 +1,32 @@
-import { supabase } from '@/integrations/supabase/client';
+/**
+ * API Client for Started IDE
+ * Uses Privy authentication and Vercel Functions
+ */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-/** Get the current user's session token, falling back to anon key. */
-async function getAuthToken(): Promise<string> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token || SUPABASE_ANON_KEY;
+// Token getter function - will be set by AuthContext
+let getAccessTokenFn: (() => Promise<string | null>) | null = null;
+
+/** Set the access token getter function (called from AuthContext) */
+export function setAccessTokenGetter(fn: () => Promise<string | null>) {
+  getAccessTokenFn = fn;
+}
+
+/** Get the current user's access token */
+async function getAuthToken(): Promise<string | null> {
+  if (!getAccessTokenFn) {
+    console.warn('Access token getter not set');
+    return null;
+  }
+  return getAccessTokenFn();
+}
+
+/** Build authorization headers */
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAuthToken();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
 }
 
 interface StreamChatOptions {
@@ -22,12 +42,12 @@ interface StreamChatOptions {
 }
 
 export async function streamChat({ messages, context, model, skillContext, mcpTools, onDelta, onDone, onError, signal }: StreamChatOptions) {
-  const token = await getAuthToken();
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/started`, {
+  const headers = await authHeaders();
+  const resp = await fetch(`${API_BASE}/started`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...headers,
     },
     body: JSON.stringify({ messages, context, model, skill_context: skillContext || undefined, mcp_tools: mcpTools }),
     signal,
@@ -109,11 +129,20 @@ interface ApplyPatchResult {
 }
 
 export async function applyPatchRemote(request: ApplyPatchRequest): Promise<ApplyPatchResult> {
-  const { data, error } = await supabase.functions.invoke('apply-patch', {
-    body: request,
+  const headers = await authHeaders();
+  const resp = await fetch(`${API_BASE}/apply-patch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(request),
   });
-  if (error) throw new Error(error.message);
-  return data as ApplyPatchResult;
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(data.error || `HTTP ${resp.status}`);
+  }
+  return resp.json();
 }
 
 export interface PermissionRequest {
@@ -136,12 +165,12 @@ interface RunCommandOptions {
 }
 
 export async function runCommandRemote({ command, cwd, timeoutS, projectId, files, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
-  const token = await getAuthToken();
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/run-command`, {
+  const headers = await authHeaders();
+  const resp = await fetch(`${API_BASE}/run-command`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...headers,
     },
     body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId, files }),
     signal,
@@ -210,10 +239,10 @@ export interface AgentRunStatus {
 }
 
 export async function getAgentRunStatus(runId: string): Promise<AgentRunStatus> {
-  const token = await getAuthToken();
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run?run_id=${encodeURIComponent(runId)}`, {
+  const headers = await authHeaders();
+  const resp = await fetch(`${API_BASE}/agent-run?run_id=${encodeURIComponent(runId)}`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
@@ -221,10 +250,10 @@ export async function getAgentRunStatus(runId: string): Promise<AgentRunStatus> 
 }
 
 export async function cancelAgentRun(runId: string): Promise<void> {
-  const token = await getAuthToken();
-  await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
+  const headers = await authHeaders();
+  await fetch(`${API_BASE}/agent-run`, {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify({ run_id: runId }),
   });
 }
@@ -259,12 +288,12 @@ interface StreamAgentOptions {
 export async function streamAgent({
   goal, files, maxIterations, presetKey, model, mcpTools, onStep, onPatch, onRunCommand, onMCPCall, onRunStarted, onDone, onError, signal,
 }: StreamAgentOptions) {
-  const token = await getAuthToken();
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/agent-run`, {
+  const headers = await authHeaders();
+  const resp = await fetch(`${API_BASE}/agent-run`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...headers,
     },
     body: JSON.stringify({ goal, files, maxIterations, presetKey, model, mcp_tools: mcpTools }),
     signal,

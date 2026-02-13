@@ -1,73 +1,65 @@
-# Welcome to Started
-
-## Project info
+# Started IDE
 
 **URL**: https://started.dev
 
-## How can I edit this code?
+## Overview
 
-There are several ways of editing your application.
+Started is a cloud-based AI coding agent IDE. It provides an intelligent development environment with autonomous AI agents, MCP integrations, and real-time collaboration.
 
-**Use Lovable**
+## Development
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### Prerequisites
 
-Changes made via Lovable will be committed automatically to this repo.
+- Node.js 20+ (or Bun)
+- PostgreSQL database
+- Privy account for authentication
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Local Setup
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Clone the repository
+git clone https://github.com/your-org/Started-IDE.git
+cd Started-IDE
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Install dependencies
+bun install  # or npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Copy environment variables
+cp .env.example .env
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Start the development server
+bun dev  # or npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+See `.env.example` for required variables:
 
-**Use GitHub Codespaces**
+- `VITE_PRIVY_APP_ID` - Privy authentication app ID
+- `VITE_API_URL` - API base URL (defaults to `/api`)
+- `DATABASE_URL` - PostgreSQL connection string
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Tech Stack
 
-## What technologies are used for this project?
+- **Frontend**: Vite, React, TypeScript, shadcn/ui, Tailwind CSS
+- **Backend**: Vercel Functions (Node.js)
+- **Database**: PostgreSQL (self-hosted)
+- **Auth**: Privy (Web3 + OAuth)
+- **AI**: Anthropic Claude, OpenAI, Google Gemini
 
-This project is built with:
+## Deployment
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+This project deploys to Vercel:
 
-## How can I deploy this project?
+```sh
+vercel deploy --prod
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Configure environment variables in the Vercel dashboard under Project Settings > Environment Variables.
 
-## Can I connect a custom domain to my Lovable project?
+## Architecture
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- `/api` - Vercel Functions (serverless API routes)
+- `/src` - React frontend application
+- `/src/lib` - Shared utilities and API client
+- `/src/hooks` - React hooks for data fetching and realtime
