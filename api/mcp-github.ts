@@ -2,7 +2,7 @@
  * MCP GitHub API Endpoint
  * Converts Supabase Edge Function to Vercel Function
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_lib/vercel-types';
 import { handleOptions } from './_lib/cors';
 import { requireAuth } from './_lib/auth';
 

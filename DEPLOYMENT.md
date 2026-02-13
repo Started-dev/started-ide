@@ -4,7 +4,7 @@ Complete guide for deploying Started IDE to production on started.dev.
 
 ## Prerequisites
 
-- Node.js 20+ or Bun
+- Node.js 24.x (or Bun)
 - PostgreSQL database (Railway, Neon, or self-hosted)
 - Privy account
 - Vercel account
@@ -121,7 +121,26 @@ Get API keys from:
   ```
 - Add as `STARTED_API_KEY`
 
-### Step 4: Vercel Deployment
+### Step 4: Runner Service (Required for command execution)
+
+The IDE delegates command execution to the runner service in [runner-service/](runner-service/).
+
+1. Deploy the runner service on a container host (Fly.io, Render, Railway, ECS)
+2. Set environment variables on the runner service:
+  ```bash
+  RUNNER_SHARED_SECRET=your-shared-secret
+  RUNNER_DATA_DIR=/var/lib/started-runner
+  RUNNER_SESSION_TTL_MS=1800000
+  RUNNER_RATE_LIMIT_PER_MIN=60
+  RUNNER_RATE_LIMIT_BURST=20
+  ```
+3. Expose the runner URL and shared secret to Vercel:
+  ```bash
+  RUNNER_URL=https://runner.started.dev
+  RUNNER_SHARED_SECRET=your-shared-secret
+  ```
+
+### Step 5: Vercel Deployment
 
 ```bash
 # Install Vercel CLI
@@ -149,7 +168,7 @@ vercel env add STARTED_API_KEY
 vercel --prod
 ```
 
-### Step 5: Custom Domain Setup
+### Step 6: Custom Domain Setup
 
 In Vercel dashboard:
 
@@ -164,7 +183,7 @@ In Vercel dashboard:
    ```
 5. Wait for DNS propagation (can take up to 48 hours, usually < 1 hour)
 
-### Step 6: GitHub OAuth App Setup
+### Step 7: GitHub OAuth App Setup
 
 1. Go to GitHub Settings > Developer settings > OAuth Apps
 2. Click "New OAuth App"
@@ -223,6 +242,10 @@ PERPLEXITY_API_KEY=pplx-...
 FIRECRAWL_API_KEY=fc-...
 MORALIS_API_KEY=...
 HELIUS_API_KEY=...
+
+# Runner Service
+RUNNER_URL=https://runner.started.dev
+RUNNER_SHARED_SECRET=your-shared-secret
 ```
 
 ## Verification
@@ -406,7 +429,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm install
       - run: npm run build
       - uses: amondnet/vercel-action@v20

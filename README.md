@@ -10,7 +10,7 @@ Started is a cloud-based AI coding agent IDE. It provides an intelligent develop
 
 ### Prerequisites
 
-- Node.js 20+ (or Bun)
+- Node.js 24.x (or Bun)
 - PostgreSQL database
 - Privy account for authentication
 
@@ -38,6 +38,7 @@ See `.env.example` for required variables:
 - `VITE_PRIVY_APP_ID` - Privy authentication app ID
 - `VITE_API_URL` - API base URL (defaults to `/api`)
 - `DATABASE_URL` - PostgreSQL connection string
+- `RUNNER_URL` - Runner service base URL (required for command execution)
 
 ## Tech Stack
 

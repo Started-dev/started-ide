@@ -1,4 +1,6 @@
-import { supabase } from '@/integrations/supabase/client';
+import { getAuthHeaders } from '@/lib/api-client';
+
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // ─── Client-side wallet tool execution ───
 
@@ -69,6 +71,28 @@ async function handleWalletTool(tool: string, input: Record<string, unknown>): P
     default:
       return { ok: false, error: `Unknown wallet tool: ${tool}` };
   }
+}
+
+async function callMcpServer(serverId: string, body: Record<string, unknown>): Promise<MCPToolCallResult> {
+  const headers = await getAuthHeaders();
+  const resp = await fetch(`${API_BASE}/${serverId}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({ error: 'Unknown error' }));
+    return { ok: false, error: data.error || `HTTP ${resp.status}` };
+  }
+
+  const data = await resp.json().catch(() => ({}));
+  if (data?.ok === false) return { ok: false, error: data.error || 'Unknown error' };
+  if (Object.prototype.hasOwnProperty.call(data, 'result')) return { ok: true, result: data.result };
+  return { ok: true, result: data };
 }
 
 export interface MCPToolCallRequest {
@@ -151,9 +175,7 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
       tenderly_account: req.tenderlyAccount,
       tenderly_project: req.tenderlyProject,
     };
-    const { data, error } = await supabase.functions.invoke('mcp-web3-gateway', { body: gwBody });
-    if (error) return { ok: false, error: error.message };
-    return data as MCPToolCallResult;
+    return callMcpServer('mcp-web3-gateway', gwBody);
   }
 
   // ─── Standard MCP routing ───
@@ -227,11 +249,5 @@ export async function callMCPTool(req: MCPToolCallRequest): Promise<MCPToolCallR
     // firecrawl and perplexity use server-side env vars, no client token needed
   }
 
-  const { data, error } = await supabase.functions.invoke(req.serverId, { body });
-
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-
-  return data as MCPToolCallResult;
+  return callMcpServer(req.serverId, body);
 }

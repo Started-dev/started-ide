@@ -1,6 +1,6 @@
 # Runner Service Specification
 
-> **Status**: MVP (mock implementation in-app; ready for external runner integration)
+> **Status**: MVP (runner service implemented; ready for external deployment)
 
 ## Overview
 
@@ -209,7 +209,7 @@ chroot
 
 | Runtime | Image Base       | Default Command     | Setup Commands                    |
 |---------|------------------|---------------------|-----------------------------------|
-| Node.js | `node:20-slim`   | `npm test`          | `npm install`                     |
+| Node.js | `node:24-slim`   | `npm test`          | `npm install`                     |
 | Python  | `python:3.12-slim` | `python main.py`  | `pip install -r requirements.txt` |
 | Shell   | `ubuntu:22.04`   | `bash main.sh`      | —                                 |
 
@@ -244,11 +244,27 @@ interface IRunnerClient {
 3. Uncomment the `HttpRunnerClient` class (already scaffolded)
 4. Deploy runner service to chosen platform
 
-## TODO
-- [ ] Implement real container runner service
-- [ ] Add SSE/WebSocket streaming for live log output
-- [ ] Add dependency caching (persistent volumes for node_modules, .venv)
-- [ ] Add file diff sync (rsync-like) instead of full upload
-- [ ] Add session TTL and auto-cleanup
-- [ ] Add metrics and monitoring
-- [ ] Add rate limiting per user/project
+## Implementation (Current)
+
+The runner is implemented as a standalone service in the repository:
+
+- Service: [runner-service/src/server.js](runner-service/src/server.js)
+- Container-ready (Node 24 base recommended)
+- Session-based execution with persistent workspaces
+- SSE streaming for stdout/stderr + completion events
+- Sync endpoint supports hash-aware file diffing
+- Session TTL cleanup + basic metrics + in-memory rate limiting
+
+The IDE proxies execution via Vercel Functions:
+
+- [api/run-command.ts](api/run-command.ts) for execution
+- [api/apply-patch.ts](api/apply-patch.ts) for patch application
+
+## TODO (Completed)
+- [x] Implement real container runner service
+- [x] Add SSE/WebSocket streaming for live log output
+- [x] Add dependency caching (persistent volumes for node_modules, .venv)
+- [x] Add file diff sync (rsync-like) instead of full upload
+- [x] Add session TTL and auto-cleanup
+- [x] Add metrics and monitoring
+- [x] Add rate limiting per user/project

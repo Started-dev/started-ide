@@ -2,7 +2,7 @@
  * Profiles API Endpoint
  * Handles user profile CRUD operations
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_lib/vercel-types';
 import { handleOptions } from './_lib/cors';
 import { requireAuth, optionalAuth } from './_lib/auth';
 import { db, query } from './_lib/db';

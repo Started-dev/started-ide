@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Cloud, Rocket, ListTodo, Puzzle, RefreshCw, Loader2, CheckCircle, AlertCircle, Trash2, Download, Copy, ExternalLink, ChevronRight } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/PrivyAuthContext';
 import { useIDE } from '@/contexts/IDEContext';
 import { toast } from '@/hooks/use-toast';
 
@@ -38,19 +38,25 @@ function saveConfig(cfg: OpenClawConfig) {
   localStorage.setItem('openclaw_api_key', cfg.apiKey);
 }
 
-async function callOpenClaw(tool: string, input?: Record<string, unknown>) {
+async function callOpenClaw(tool: string, token: string, input?: Record<string, unknown>) {
   const cfg = getConfig();
   if (!cfg.url || !cfg.apiKey) throw new Error('OpenClaw not configured');
-  const { data, error } = await supabase.functions.invoke('mcp-openclaw', {
-    body: { tool, input, openclaw_url: cfg.url, openclaw_api_key: cfg.apiKey },
+  const resp = await fetch('/api/mcp-openclaw', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ tool, input, openclaw_url: cfg.url, openclaw_api_key: cfg.apiKey }),
   });
-  if (error) throw new Error(error.message);
-  if (!data?.ok) throw new Error(data?.error || 'Unknown error');
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${resp.status}`);
   return data.result;
 }
 
 /* ─── Install Wizard ─── */
 function InstallWizard({ projectId, onConnected }: { projectId: string; onConnected: (url: string, key: string) => void }) {
+  const { getAccessToken } = useAuth();
   const [step, setStep] = useState(1);
   const [llmKey, setLlmKey] = useState('');
   const [useGateway, setUseGateway] = useState(true);
@@ -75,12 +81,18 @@ function InstallWizard({ projectId, onConnected }: { projectId: string; onConnec
     if (!key) { toast({ title: 'Enter an LLM key or use the gateway', variant: 'destructive' }); return; }
     setInstalling(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await supabase.functions.invoke('install-openclaw', {
-        body: { llm_key: key, project_id: projectId },
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      const resp = await fetch('/api/install-openclaw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ llm_key: key, project_id: projectId }),
       });
-      if (res.error) throw new Error(res.error.message);
-      const d = res.data;
+      const d = await resp.json().catch(() => ({}));
+      if (!resp.ok || d?.ok === false) throw new Error(d?.error || `HTTP ${resp.status}`);
       if (!d?.ok) throw new Error(d?.error || 'Install failed');
       setInstallId(d.install_id);
       setInstanceUrl(d.instance_url);
@@ -97,9 +109,17 @@ function InstallWizard({ projectId, onConnected }: { projectId: string; onConnec
 
   const pollStatus = useCallback(async (id: string) => {
     try {
-      const { data } = await supabase.functions.invoke('install-openclaw', {
-        body: { _method: 'GET', install_id: id },
+      const token = await getAccessToken();
+      if (!token) return;
+      const resp = await fetch('/api/install-openclaw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ _method: 'GET', install_id: id }),
       });
+      const data = await resp.json().catch(() => ({}));
       if (data?.logs) setLogs(data.logs);
       if (data?.status) setInstallStatus(data.status);
       if (data?.instance_url) setInstanceUrl(data.instance_url);
@@ -108,7 +128,7 @@ function InstallWizard({ projectId, onConnected }: { projectId: string; onConnec
         if (data.status === 'completed') setStep(3);
       }
     } catch { /* silent */ }
-  }, []);
+  }, [getAccessToken]);
 
   const handleConnect = () => {
     onConnected(instanceUrl, installId || '');
@@ -246,6 +266,7 @@ function InstallWizard({ projectId, onConnected }: { projectId: string; onConnec
 
 /* ─── Main Panel ─── */
 export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
+  const { getAccessToken } = useAuth();
   const { files, project } = useIDE();
   const [tab, setTab] = useState<Tab>('install');
   const [config, setConfig] = useState<OpenClawConfig>(getConfig);
@@ -272,14 +293,22 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
 
   useEffect(() => {
     checkExistingInstallation();
-  }, []);
+  }, [getAccessToken]);
 
   const checkExistingInstallation = async () => {
     try {
-      const res = await supabase.functions.invoke('install-openclaw', {
-        body: { _method: 'GET' },
+      const token = await getAccessToken();
+      if (!token) return;
+      const resp = await fetch('/api/install-openclaw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ _method: 'GET' }),
       });
-      const installations = res.data?.installations;
+      const data = await resp.json().catch(() => ({}));
+      const installations = data?.installations;
       if (installations?.length > 0) {
         const latest = installations[0];
         setExistingInstall(latest);
@@ -313,7 +342,9 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
   const fetchStatus = async () => {
     setStatusLoading(true);
     try {
-      const res = await callOpenClaw('openclaw_status');
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await callOpenClaw('openclaw_status', token);
       setStatus(res);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -325,7 +356,9 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
   const fetchTasks = async () => {
     setTasksLoading(true);
     try {
-      const res = await callOpenClaw('openclaw_list_tasks', { limit: 20 });
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await callOpenClaw('openclaw_list_tasks', token, { limit: 20 });
       setTasks(Array.isArray(res) ? res : res?.tasks || []);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -337,7 +370,9 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
   const fetchSkills = async () => {
     setSkillsLoading(true);
     try {
-      const res = await callOpenClaw('openclaw_list_skills');
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await callOpenClaw('openclaw_list_skills', token);
       setSkills(Array.isArray(res) ? res : res?.skills || []);
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -350,8 +385,10 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
     setDeploying(true);
     setDeployResult(null);
     try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not authenticated');
       const projectFiles = files.filter(f => !f.isFolder).map(f => ({ path: f.path, content: f.content }));
-      const res = await callOpenClaw('openclaw_mcp_invoke', {
+      const res = await callOpenClaw('openclaw_mcp_invoke', token, {
         mcp_tool: 'deploy_project',
         mcp_input: { files: projectFiles },
       });
@@ -367,7 +404,9 @@ export function OpenClawPanel({ onClose }: OpenClawPanelProps) {
 
   const cancelTask = async (taskId: string) => {
     try {
-      await callOpenClaw('openclaw_cancel_task', { task_id: taskId });
+      const token = await getAccessToken();
+      if (!token) throw new Error('Not authenticated');
+      await callOpenClaw('openclaw_cancel_task', token, { task_id: taskId });
       toast({ title: 'Task cancelled' });
       fetchTasks();
     } catch (e: any) {

@@ -2,7 +2,7 @@
  * Authentication middleware using Privy
  * Replaces Supabase Auth
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './vercel-types';
 
 // Privy verification configuration
 const PRIVY_APP_ID = process.env.PRIVY_APP_ID!;

@@ -3,7 +3,7 @@ import {
   Zap, Search, Wallet, Server, ArrowRight, Loader2,
   Shield, Eye, ExternalLink,
 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/PrivyAuthContext';
 import { useIDE } from '@/contexts/IDEContext';
 
 type Chain = 'evm' | 'solana';
@@ -17,6 +17,7 @@ interface ProtocolResult {
 
 export const ProtocolZone = forwardRef<HTMLDivElement>(function ProtocolZone(_props, ref) {
   const { project } = useIDE();
+  const { getAccessToken } = useAuth();
   const [chain, setChain] = useState<Chain>('evm');
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,20 +30,30 @@ export const ProtocolZone = forwardRef<HTMLDivElement>(function ProtocolZone(_pr
     setActiveAction(toolName);
 
     try {
-      const { data, error } = await supabase.functions.invoke('mcp-invoke', {
-        body: {
-          project_id: project.id,
-          server_key: serverKey,
-          tool_name: toolName,
-          risk: 'read',
-          input,
-        },
-      });
-
-      if (error) {
-        setResult({ ok: false, error: error.message });
+      const token = await getAccessToken();
+      if (!token) {
+        setResult({ ok: false, error: 'Not authenticated' });
       } else {
-        setResult(data as ProtocolResult);
+        const resp = await fetch('/api/mcp-invoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            project_id: project.id,
+            server_key: serverKey,
+            tool_name: toolName,
+            risk: 'read',
+            input,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data?.ok === false) {
+          setResult({ ok: false, error: data?.error || `HTTP ${resp.status}` });
+        } else {
+          setResult(data as ProtocolResult);
+        }
       }
     } catch (e) {
       setResult({ ok: false, error: e instanceof Error ? e.message : 'Unknown error' });

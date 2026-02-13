@@ -2,7 +2,7 @@
  * Health Check Endpoint
  * Returns system status
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_lib/vercel-types';
 import { handleOptions } from './_lib/cors';
 import { query } from './_lib/db';
 

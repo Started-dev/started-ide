@@ -3,7 +3,7 @@
  * Converted from Supabase Edge Function to Vercel Function
  * Replaces: supabase/functions/started/index.ts
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_lib/vercel-types';
 import { handleOptions } from './_lib/cors';
 import { requireAuth, type AuthUser } from './_lib/auth';
 import { db, query } from './_lib/db';

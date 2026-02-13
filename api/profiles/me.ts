@@ -2,7 +2,7 @@
  * Get current user's profile
  * GET /api/profiles/me
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '../_lib/vercel-types';
 import { handleOptions } from '../_lib/cors';
 import { requireAuth } from '../_lib/auth';
 import { query } from '../_lib/db';

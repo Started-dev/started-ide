@@ -3,7 +3,7 @@
  * Routes requests to OpenAI, Anthropic, or Google based on model
  * Replaces ai.gateway.lovable.dev
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from './_lib/vercel-types';
 import { handleOptions } from './_lib/cors';
 import { requireAuth } from './_lib/auth';
 

@@ -23,7 +23,7 @@ async function getAuthToken(): Promise<string | null> {
 }
 
 /** Build authorization headers */
-async function authHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
@@ -42,7 +42,7 @@ interface StreamChatOptions {
 }
 
 export async function streamChat({ messages, context, model, skillContext, mcpTools, onDelta, onDone, onError, signal }: StreamChatOptions) {
-  const headers = await authHeaders();
+  const headers = await getAuthHeaders();
   const resp = await fetch(`${API_BASE}/started`, {
     method: 'POST',
     headers: {
@@ -129,7 +129,7 @@ interface ApplyPatchResult {
 }
 
 export async function applyPatchRemote(request: ApplyPatchRequest): Promise<ApplyPatchResult> {
-  const headers = await authHeaders();
+  const headers = await getAuthHeaders();
   const resp = await fetch(`${API_BASE}/apply-patch`, {
     method: 'POST',
     headers: {
@@ -156,6 +156,7 @@ interface RunCommandOptions {
   cwd?: string;
   timeoutS?: number;
   projectId?: string;
+  runtimeType?: string;
   files?: Array<{ path: string; content: string }>;
   onLog: (line: string) => void;
   onDone: (result: { exitCode: number; cwd: string; durationMs: number; changedFiles?: Array<{ path: string; content: string }> }) => void;
@@ -164,15 +165,15 @@ interface RunCommandOptions {
   signal?: AbortSignal;
 }
 
-export async function runCommandRemote({ command, cwd, timeoutS, projectId, files, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
-  const headers = await authHeaders();
+export async function runCommandRemote({ command, cwd, timeoutS, projectId, runtimeType, files, onLog, onDone, onError, onRequiresApproval, signal }: RunCommandOptions) {
+  const headers = await getAuthHeaders();
   const resp = await fetch(`${API_BASE}/run-command`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...headers,
     },
-    body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId, files }),
+    body: JSON.stringify({ command, cwd, timeout_s: timeoutS, project_id: projectId, runtime_type: runtimeType, files }),
     signal,
   });
 
@@ -222,7 +223,7 @@ export async function runCommandRemote({ command, cwd, timeoutS, projectId, file
           if (parsed.type === 'stdout') onLog(parsed.data);
           else if (parsed.type === 'stderr') onLog(parsed.data);
           else if (parsed.type === 'done') {
-            onDone({ exitCode: parsed.exitCode, cwd: parsed.cwd, durationMs: parsed.durationMs });
+            onDone({ exitCode: parsed.exitCode, cwd: parsed.cwd, durationMs: parsed.durationMs, changedFiles: parsed.changedFiles });
             return;
           }
         } catch { /* ignore */ }
@@ -239,7 +240,7 @@ export interface AgentRunStatus {
 }
 
 export async function getAgentRunStatus(runId: string): Promise<AgentRunStatus> {
-  const headers = await authHeaders();
+  const headers = await getAuthHeaders();
   const resp = await fetch(`${API_BASE}/agent-run?run_id=${encodeURIComponent(runId)}`, {
     method: 'GET',
     headers,
@@ -250,7 +251,7 @@ export async function getAgentRunStatus(runId: string): Promise<AgentRunStatus> 
 }
 
 export async function cancelAgentRun(runId: string): Promise<void> {
-  const headers = await authHeaders();
+  const headers = await getAuthHeaders();
   await fetch(`${API_BASE}/agent-run`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...headers },
@@ -271,6 +272,7 @@ export interface AgentStepEvent {
 interface StreamAgentOptions {
   goal: string;
   files: Array<{ path: string; content: string }>;
+  projectId?: string;
   maxIterations?: number;
   presetKey?: string;
   model?: string;
@@ -286,16 +288,16 @@ interface StreamAgentOptions {
 }
 
 export async function streamAgent({
-  goal, files, maxIterations, presetKey, model, mcpTools, onStep, onPatch, onRunCommand, onMCPCall, onRunStarted, onDone, onError, signal,
+  goal, files, projectId, maxIterations, presetKey, model, mcpTools, onStep, onPatch, onRunCommand, onMCPCall, onRunStarted, onDone, onError, signal,
 }: StreamAgentOptions) {
-  const headers = await authHeaders();
+  const headers = await getAuthHeaders();
   const resp = await fetch(`${API_BASE}/agent-run`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...headers,
     },
-    body: JSON.stringify({ goal, files, maxIterations, presetKey, model, mcp_tools: mcpTools }),
+    body: JSON.stringify({ goal, files, project_id: projectId, maxIterations, presetKey, model, mcp_tools: mcpTools }),
     signal,
   });
 

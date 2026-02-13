@@ -2,7 +2,7 @@
  * Database Query API Endpoint
  * Handles select, insert, update, delete operations
  */
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '../_lib/vercel-types';
 import { handleOptions } from '../_lib/cors';
 import { requireAuth } from '../_lib/auth';
 import { query } from '../_lib/db';
@@ -34,9 +34,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { operation } = req.query;
 
+    const identPattern = /^[a-zA-Z0-9_]+$/;
+    const columnsPattern = /^(\*|[a-zA-Z0-9_]+(\s*,\s*[a-zA-Z0-9_]+)*)$/;
+
+    if (!table || typeof table !== 'string' || !identPattern.test(table)) {
+      return res.status(400).json({ error: 'Invalid table name' });
+    }
+
+    if (columns && (typeof columns !== 'string' || !columnsPattern.test(columns))) {
+      return res.status(400).json({ error: 'Invalid columns format' });
+    }
+
     let sql = '';
     const params: unknown[] = [];
     let paramIndex = 1;
+
+    const allowedFilterTypes = new Set(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'is', 'in', 'contains', 'containedBy']);
+    if (filters && Array.isArray(filters)) {
+      for (const filter of filters) {
+        if (!identPattern.test(filter.column)) {
+          return res.status(400).json({ error: 'Invalid filter column' });
+        }
+        if (!allowedFilterTypes.has(filter.type)) {
+          return res.status(400).json({ error: `Invalid filter type: ${filter.type}` });
+        }
+      }
+    }
+
+    if (orderBy && Array.isArray(orderBy)) {
+      for (const order of orderBy) {
+        if (!identPattern.test(order.column)) {
+          return res.status(400).json({ error: 'Invalid orderBy column' });
+        }
+      }
+    }
 
     if (operation === 'select') {
       sql = `SELECT ${columns || '*'} FROM "${table}"`;
@@ -84,6 +115,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               break;
             case 'in':
               whereClauses.push(`"${filter.column}" = ANY($${paramIndex++})`);
+              params.push(filter.value);
+              break;
+            case 'contains':
+              whereClauses.push(`"${filter.column}" @> $${paramIndex++}`);
+              params.push(filter.value);
+              break;
+            case 'containedBy':
+              whereClauses.push(`"${filter.column}" <@ $${paramIndex++}`);
               params.push(filter.value);
               break;
           }
@@ -149,10 +188,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (filters && filters.length > 0) {
         const whereClauses: string[] = [];
         for (const filter of filters) {
-          if (filter.type === 'eq') {
-            whereClauses.push(`"${filter.column}" = $${paramIndex++}`);
-            values.push(filter.value);
+          if (filter.type !== 'eq') {
+            return res.status(400).json({ error: 'Only eq filters are supported for update' });
           }
+          whereClauses.push(`"${filter.column}" = $${paramIndex++}`);
+          values.push(filter.value);
         }
         if (whereClauses.length > 0) {
           sql += ' WHERE ' + whereClauses.join(' AND ');
@@ -174,10 +214,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (filters && filters.length > 0) {
         const whereClauses: string[] = [];
         for (const filter of filters) {
-          if (filter.type === 'eq') {
-            whereClauses.push(`"${filter.column}" = $${paramIndex++}`);
-            params.push(filter.value);
+          if (filter.type !== 'eq') {
+            return res.status(400).json({ error: 'Only eq filters are supported for delete' });
           }
+          whereClauses.push(`"${filter.column}" = $${paramIndex++}`);
+          params.push(filter.value);
         }
         if (whereClauses.length > 0) {
           sql += ' WHERE ' + whereClauses.join(' AND ');

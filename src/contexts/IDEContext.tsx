@@ -855,6 +855,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
         command,
         cwd: runnerSession?.cwd || '/workspace',
         timeoutS: 600,
+        runtimeType: project.runtimeType,
         onLog: (line) => { setRuns(prev => prev.map(r => r.id === run.id ? { ...r, logs: r.logs + line } : r)); },
         onDone: (result) => { setRuns(prev => prev.map(r => r.id === run.id ? { ...r, status: result.exitCode === 0 ? 'success' as const : 'error' as const, logs: r.logs + `\n${result.exitCode === 0 ? '✓' : '✗'} Exited ${result.exitCode}\n`, exitCode: result.exitCode, cwd: result.cwd, durationMs: result.durationMs } : r)); },
         onError: (error) => { setRuns(prev => prev.map(r => r.id === run.id ? { ...r, status: 'error' as const, logs: r.logs + `\n⚠ ${error}\n`, exitCode: 1 } : r)); },
@@ -1027,6 +1028,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
       cwd: runnerSession?.cwd || '/workspace',
       timeoutS: 600,
       projectId: project.id,
+      runtimeType: project.runtimeType,
       files: filesToSend,
       onLog: (line) => {
         setRuns(prev => prev.map(r =>
@@ -1226,6 +1228,7 @@ export function IDEProvider({ children }: { children: React.ReactNode }) {
     streamAgent({
       goal,
       files: projectFiles,
+      projectId: project.id,
       maxIterations: 10,
       presetKey,
       model: selectedModel,
