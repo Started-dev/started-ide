@@ -3,6 +3,7 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
+  "nodeVersion": "24",
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60
