@@ -10,7 +10,7 @@ Started is a cloud-based AI coding agent IDE. It provides an intelligent develop
 
 ### Prerequisites
 
-- Node.js 22.x (or Bun)
+- Node.js 20.x (or Bun)
 - PostgreSQL database
 - Privy account for authentication
 

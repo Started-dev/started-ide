@@ -4,7 +4,7 @@ Complete guide for deploying Started IDE to production on started.dev.
 
 ## Prerequisites
 
-- Node.js 22.x (or Bun)
+- Node.js 20.x (or Bun)
 - PostgreSQL database (Railway, Neon, or self-hosted)
 - Privy account
 - Vercel account
@@ -429,7 +429,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
         with:
-          node-version: '22'
+          node-version: '20'
       - run: npm install
       - run: npm run build
       - uses: amondnet/vercel-action@v20
